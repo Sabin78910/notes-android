@@ -12,6 +12,12 @@ class NoteStore(initial: List<Note> = emptyList()) {
         return Note(nextId++, text.trim()).also { notes.add(it) }
     }
 
+    fun edit(id: Long, text: String) {
+        require(text.isNotBlank()) { "Note is empty" }
+        val i = notes.indexOfFirst { it.id == id }
+        if (i >= 0) notes[i] = notes[i].copy(text = text.trim())
+    }
+
     fun delete(id: Long) { notes.removeAll { it.id == id } }
 
     fun togglePin(id: Long) {

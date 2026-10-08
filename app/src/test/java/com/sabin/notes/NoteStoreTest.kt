@@ -3,6 +3,7 @@ package com.sabin.notes
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.Assert.assertThrows
 
 class NoteStoreTest {
     @Test fun pinnedNotesComeFirst() {
@@ -22,5 +23,30 @@ class NoteStoreTest {
         val restored = NoteStore.deserialize(s.serialize())
         assertEquals(s.visible(), restored.visible())
         assertTrue(restored.visible().first().pinned)
+    }
+
+    @Test fun editChangesTextAndKeepsPin() {
+        val s = NoteStore(); val a = s.add("old"); s.togglePin(a.id)
+        s.edit(a.id, "  new  ")
+        val n = s.visible().single()
+        assertEquals("new", n.text)
+        assertTrue(n.pinned)
+    }
+
+    @Test fun editRejectsBlankText() {
+        val s = NoteStore(); val a = s.add("old")
+        assertThrows(IllegalArgumentException::class.java) { s.edit(a.id, "   ") }
+        assertEquals("old", s.visible().single().text)
+    }
+
+    @Test fun editUnknownIdIsNoOp() {
+        val s = NoteStore(); s.add("old")
+        s.edit(999, "new")
+        assertEquals(listOf("old"), s.visible().map { it.text })
+    }
+
+    @Test fun editedNoteSurvivesSerialization() {
+        val s = NoteStore(); val a = s.add("old"); s.edit(a.id, "new")
+        assertEquals("new", NoteStore.deserialize(s.serialize()).visible().single().text)
     }
 }
