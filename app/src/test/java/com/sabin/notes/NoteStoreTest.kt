@@ -23,4 +23,24 @@ class NoteStoreTest {
         assertEquals(s.visible(), restored.visible())
         assertTrue(restored.visible().first().pinned)
     }
+
+    @Test fun addRecordsCreatedAt() {
+        val n = NoteStore().add("x", now = 1234L)
+        assertEquals(1234L, n.createdAt)
+    }
+
+    @Test fun createdAtRoundTrips() {
+        val s = NoteStore(); val n = s.add("a\tb", now = 99L); s.togglePin(n.id)
+        val r = NoteStore.deserialize(s.serialize()).visible().single()
+        assertEquals(99L, r.createdAt)
+        assertEquals("a\tb", r.text)
+        assertTrue(r.pinned)
+    }
+
+    @Test fun deserializesOldFormatWithoutCreatedAt() {
+        val r = NoteStore.deserialize("1\ttrue\told\ttext\n2\tfalse\tb").visible()
+        assertEquals(listOf("old\ttext", "b"), r.map { it.text })
+        assertEquals(0L, r.first().createdAt)
+        assertTrue(r.first().pinned)
+    }
 }
