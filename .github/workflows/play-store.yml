@@ -28,7 +28,7 @@ jobs:
           distribution: temurin
           java-version: "17"
       - if: env.HAS_SECRETS == 'true'
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
       - if: env.HAS_SECRETS == 'true'
         name: Build signed AAB
         env:
