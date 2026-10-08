@@ -31,9 +31,26 @@ fun NotesScreen() {
     var version by remember { mutableIntStateOf(0) }
     var draft by remember { mutableStateOf("") }
     var query by remember { mutableStateOf("") }
+    var editing by remember { mutableStateOf<Note?>(null) }
+    var editText by remember { mutableStateOf("") }
     val notes = remember(version, query) { store.visible(query) }
 
     fun save() { prefs.edit().putString(KEY, store.serialize()).apply(); version++ }
+
+    editing?.let { n ->
+        AlertDialog(
+            onDismissRequest = { editing = null },
+            title = { Text("Edit note") },
+            text = { OutlinedTextField(editText, { editText = it }, modifier = Modifier.fillMaxWidth()) },
+            confirmButton = {
+                TextButton(
+                    enabled = editText.isNotBlank(),
+                    onClick = { store.edit(n.id, editText); editing = null; save() }
+                ) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { editing = null }) { Text("Cancel") } }
+        )
+    }
 
     Scaffold(topBar = { TopAppBar(title = { Text("Notes") }) }) { padding ->
         Column(Modifier.padding(padding).padding(16.dp)) {
@@ -50,6 +67,7 @@ fun NotesScreen() {
                         Column(Modifier.padding(12.dp)) {
                             Text((if (n.pinned) "📌 " else "") + n.text)
                             Row {
+                                TextButton(onClick = { editText = n.text; editing = n }) { Text("Edit") }
                                 TextButton(onClick = { store.togglePin(n.id); save() }) { Text(if (n.pinned) "Unpin" else "Pin") }
                                 TextButton(onClick = { store.delete(n.id); save() }) { Text("Delete") }
                             }
