@@ -26,5 +26,5 @@ jobs:
           distribution: temurin
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew assembleDebug --no-daemon
+      - run: ./gradlew assembleDebug --no-daemon --no-build-cache --rerun-tasks
       - uses: github/codeql-action/analyze@v3
