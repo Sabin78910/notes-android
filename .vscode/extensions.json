@@ -1,0 +1,8 @@
+{
+  "recommendations": [
+    "fwcd.kotlin", "vscjava.vscode-gradle", "redhat.vscode-xml",
+    "github.vscode-github-actions",
+    "github.vscode-pull-request-github",
+    "editorconfig.editorconfig"
+  ]
+}

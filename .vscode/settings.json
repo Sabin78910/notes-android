@@ -1,0 +1,4 @@
+{
+  "java.import.gradle.enabled": true,
+  "files.exclude": { "**/build": true, "**/.gradle": true }
+}

@@ -1,0 +1,49 @@
+name: Google Play (internal track)
+
+# Builds a signed AAB and uploads it to the Play internal track.
+# Skips cleanly until these repo secrets exist:
+#   KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD, PLAY_SERVICE_ACCOUNT_JSON
+# The FIRST upload of every app must be done by hand in Play Console.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  play:
+    runs-on: ubuntu-latest
+    env:
+      HAS_SECRETS: ${{ secrets.KEYSTORE_BASE64 != '' && secrets.PLAY_SERVICE_ACCOUNT_JSON != '' }}
+    steps:
+      - if: env.HAS_SECRETS != 'true'
+        run: echo "::notice::Play secrets not configured yet — skipping upload."
+      - if: env.HAS_SECRETS == 'true'
+        uses: actions/checkout@v4
+      - if: env.HAS_SECRETS == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - if: env.HAS_SECRETS == 'true'
+        uses: gradle/actions/setup-gradle@v4
+      - if: env.HAS_SECRETS == 'true'
+        name: Build signed AAB
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          VERSION_CODE: ${{ github.run_number }}
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          KEYSTORE_FILE="$RUNNER_TEMP/upload.jks" ./gradlew bundleRelease --no-daemon
+      - if: env.HAS_SECRETS == 'true'
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.sabin.notes
+          releaseFiles: app/build/outputs/bundle/release/app-release.aab
+          track: internal
+          status: completed
