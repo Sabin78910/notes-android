@@ -16,10 +16,13 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
@@ -38,8 +41,7 @@ class MainActivity : ComponentActivity() {
         )
         super.onCreate(savedInstanceState)
         setContent {
-            val colors = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()
-            MaterialTheme(colorScheme = colors) { NotesScreen() }
+            NotesTheme { NotesScreen() }
         }
     }
 }
@@ -55,6 +57,7 @@ fun NotesScreen() {
     var view by remember { mutableStateOf("Notes") }
     var version by remember { mutableIntStateOf(0) }
     var draft by remember { mutableStateOf("") }
+    var adding by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     var newestFirst by remember { mutableStateOf(true) }
     var colorFilter by remember { mutableStateOf<NoteColor?>(null) }
@@ -97,6 +100,21 @@ fun NotesScreen() {
     }
 
 
+    if (adding) {
+        AlertDialog(
+            onDismissRequest = { adding = false },
+            title = { Text("New note") },
+            text = { OutlinedTextField(draft, { draft = it }, label = { Text("New note") }, modifier = Modifier.fillMaxWidth()) },
+            confirmButton = {
+                TextButton(
+                    enabled = draft.isNotBlank(),
+                    onClick = { store.add(draft); draft = ""; adding = false; save() }
+                ) { Text("Add note") }
+            },
+            dismissButton = { TextButton(onClick = { adding = false }) { Text("Cancel") } }
+        )
+    }
+
     editing?.let { n ->
         AlertDialog(
             onDismissRequest = { editing = null },
@@ -136,11 +154,21 @@ fun NotesScreen() {
         }
     }
 
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Notes") }) },
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        topBar = { LargeTopAppBar(title = { Text("Notes") }, scrollBehavior = scrollBehavior) },
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
+                onClick = { adding = true },
+                icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                text = { Text("New note") }
+            )
+        },
         snackbarHost = { SnackbarHost(snackbarHost) }
     ) { padding ->
-        Column(Modifier.padding(padding).padding(16.dp)) {
+        LazyColumn(Modifier.padding(padding).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 88.dp)) {
+          item { Column {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("Notes", "Archive", "Trash").forEach { v ->
                     FilterChip(view == v, { view = v }, label = { Text(v) })
@@ -177,19 +205,14 @@ fun NotesScreen() {
                     }
                 }
             }
-            OutlinedTextField(draft, { draft = it }, label = { Text("New note") }, modifier = Modifier.fillMaxWidth())
-            Button(
-                onClick = { if (draft.isNotBlank()) { store.add(draft); draft = ""; save() } },
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
-            ) { Text("Add note") }
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          } }
                 items(notes, key = { it.id }) { n ->
                     val fg = n.color?.let { Color(it.text(dark)) } ?: Color.Unspecified
                     Card(
                         Modifier.fillMaxWidth(),
                         colors = n.color?.let { CardDefaults.cardColors(containerColor = Color(it.background(dark)), contentColor = fg) } ?: CardDefaults.cardColors()
                     ) {
-                        Column(Modifier.padding(12.dp)) {
+                        Column(Modifier.padding(16.dp)) {
                             PinPresentation.badge(n.pinned)?.let {
                                 Text("📌 $it", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                             }
@@ -246,6 +269,5 @@ fun NotesScreen() {
                     }
                 }
             }
-        }
     }
 }
