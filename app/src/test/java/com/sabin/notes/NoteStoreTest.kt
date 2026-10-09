@@ -70,4 +70,25 @@ class NoteStoreTest {
         s.delete(a.id); s.restore(a)
         assertTrue(s.add("y").id > a.id)
     }
+
+    @Test fun addStoresCreatedAt() {
+        val a = NoteStore().add("x", now = 1234L)
+        assertEquals(1234L, a.createdAt)
+    }
+
+    @Test fun createdAtSurvivesSerialization() {
+        val s = NoteStore(); val a = s.add("x\ty", now = 5555L); s.togglePin(a.id)
+        val n = NoteStore.deserialize(s.serialize()).visible().single()
+        assertEquals(5555L, n.createdAt)
+        assertEquals("x\ty", n.text)
+        assertTrue(n.pinned)
+    }
+
+    @Test fun deserializesOldFormatWithoutCreatedAt() {
+        val n = NoteStore.deserialize("1\ttrue\told\ttext\n2\tfalse\tb").visible()
+        assertEquals(listOf(1L, 2L), n.map { it.id }.sorted())
+        assertEquals(0L, n.first { it.id == 1L }.createdAt)
+        assertEquals("old\ttext", n.first { it.id == 1L }.text)
+        assertTrue(n.first { it.id == 1L }.pinned)
+    }
 }
