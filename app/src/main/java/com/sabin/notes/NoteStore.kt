@@ -3,7 +3,8 @@ package com.sabin.notes
 data class Note(val id: Long, val text: String, val pinned: Boolean = false, val createdAt: Long = 0L,
     val checklist: Boolean = false,
     /** Indices (into [Checklist.items]) of ticked items. */
-    val checked: Set<Int> = emptySet()
+    val checked: Set<Int> = emptySet(),
+    val color: NoteColor? = null
 )
 
 /** Checklist helpers: each non-blank line of a checklist note is one item. */
@@ -47,6 +48,11 @@ class NoteStore(initial: List<Note> = emptyList()) {
         if (i >= 0) notes[i] = notes[i].copy(checklist = on, checked = emptySet())
     }
 
+    fun setColor(id: Long, color: NoteColor?) {
+        val i = notes.indexOfFirst { it.id == id }
+        if (i >= 0) notes[i] = notes[i].copy(color = color)
+    }
+
     fun toggleItem(id: Long, index: Int) {
         val i = notes.indexOfFirst { it.id == id }
         if (i < 0 || !notes[i].checklist || index !in Checklist.items(notes[i].text).indices) return
@@ -68,15 +74,15 @@ class NoteStore(initial: List<Note> = emptyList()) {
     }
 
     /** Pinned first, then newest (or oldest) first; filtered by case-insensitive query. */
-    fun visible(query: String = "", newestFirst: Boolean = true): List<Note> =
-        notes.filter { it.text.contains(query.trim(), ignoreCase = true) }
+    fun visible(query: String = "", newestFirst: Boolean = true, color: NoteColor? = null): List<Note> =
+        notes.filter { it.text.contains(query.trim(), ignoreCase = true) && (color == null || it.color == color) }
             .sortedWith(
                 compareByDescending<Note> { it.pinned }
                     .let { if (newestFirst) it.thenByDescending { n -> n.id } else it.thenBy { n -> n.id } }
             )
 
     fun serialize(): String = notes.joinToString("\n") {
-        "${it.id}\t${it.pinned}:${it.createdAt}:${it.checklist}:${it.checked.sorted().joinToString(",")}\t${it.text.replace("\\", "\\\\").replace("\n", "\\n")}"
+        "${it.id}\t${it.pinned}:${it.createdAt}:${it.checklist}:${it.checked.sorted().joinToString(",")}:${it.color?.name.orEmpty()}\t${it.text.replace("\\", "\\\\").replace("\n", "\\n")}"
     }
 
     companion object {
@@ -86,14 +92,15 @@ class NoteStore(initial: List<Note> = emptyList()) {
                 if (parts.size < 3) return@mapNotNull null
                 val text = parts[2].replace(Regex("\\\\(.)")) { if (it.groupValues[1] == "n") "\n" else it.groupValues[1] }
                 // Old data has just "pinned"; new data has "pinned:createdAt" (0 = unknown).
-                val meta = parts[1].split(":", limit = 4)
+                val meta = parts[1].split(":", limit = 5)
                 Note(
                     parts[0].toLongOrNull() ?: return@mapNotNull null,
                     text,
                     meta[0].toBoolean(),
                     meta.getOrNull(1)?.toLongOrNull() ?: 0L,
                     meta.getOrNull(2).toBoolean(),
-                    meta.getOrNull(3).orEmpty().split(",").mapNotNull { it.toIntOrNull() }.toSet()
+                    meta.getOrNull(3).orEmpty().split(",").mapNotNull { it.toIntOrNull() }.toSet(),
+                    NoteColor.fromName(meta.getOrNull(4))
                 )
             }
         )

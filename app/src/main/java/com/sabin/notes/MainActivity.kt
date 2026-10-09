@@ -8,6 +8,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import android.provider.Settings
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -16,6 +18,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -51,13 +54,15 @@ fun NotesScreen() {
     var draft by remember { mutableStateOf("") }
     var query by remember { mutableStateOf("") }
     var newestFirst by remember { mutableStateOf(true) }
+    var colorFilter by remember { mutableStateOf<NoteColor?>(null) }
     var editing by remember { mutableStateOf<Note?>(null) }
     var editText by remember { mutableStateOf("") }
     val resolver = LocalContext.current.contentResolver
     val animationsEnabled = Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) != 0f
     val snackbarHost = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    val notes = remember(version, query, newestFirst) { store.visible(query, newestFirst) }
+    val notes = remember(version, query, newestFirst, colorFilter) { store.visible(query, newestFirst, colorFilter) }
+    val dark = isSystemInDarkTheme()
 
     fun save() { prefs.edit().putString(KEY, store.serialize()).apply(); version++ }
 
@@ -94,6 +99,16 @@ fun NotesScreen() {
             TextButton(onClick = { newestFirst = !newestFirst }, modifier = Modifier.heightIn(min = 48.dp)) {
                 Text(if (newestFirst) "Sort: Newest first" else "Sort: Oldest first")
             }
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(colorFilter == null, { colorFilter = null }, label = { Text("All") })
+                NoteColor.entries.forEach { c ->
+                    FilterChip(
+                        colorFilter == c, { colorFilter = if (colorFilter == c) null else c },
+                        label = { Text(if (colorFilter == c) "✓ ${c.label}" else c.label, color = Color(c.text(dark))) },
+                        colors = FilterChipDefaults.filterChipColors(containerColor = Color(c.background(dark)), selectedContainerColor = Color(c.background(dark)))
+                    )
+                }
+            }
             OutlinedTextField(draft, { draft = it }, label = { Text("New note") }, modifier = Modifier.fillMaxWidth())
             Button(
                 onClick = { if (draft.isNotBlank()) { store.add(draft); draft = ""; save() } },
@@ -101,7 +116,11 @@ fun NotesScreen() {
             ) { Text("Add note") }
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(notes, key = { it.id }) { n ->
-                    Card(Modifier.fillMaxWidth()) {
+                    val fg = n.color?.let { Color(it.text(dark)) } ?: Color.Unspecified
+                    Card(
+                        Modifier.fillMaxWidth(),
+                        colors = n.color?.let { CardDefaults.cardColors(containerColor = Color(it.background(dark)), contentColor = fg) } ?: CardDefaults.cardColors()
+                    ) {
                         Column(Modifier.padding(12.dp)) {
                             PinPresentation.badge(n.pinned)?.let {
                                 Text("📌 $it", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
@@ -135,6 +154,7 @@ fun NotesScreen() {
                                 TextButton(onClick = { editText = n.text; editing = n }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp).semantics { contentDescription = PinPresentation.editDescription(n.text) }) { Text("Edit") }
                                 TextButton(onClick = { store.togglePin(n.id); save() }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp).semantics { contentDescription = PinPresentation.pinDescription(n.pinned, n.text) }) { Text(PinPresentation.buttonLabel(n.pinned)) }
                                 TextButton(onClick = { store.setChecklist(n.id, !n.checklist); save() }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)) { Text(if (n.checklist) "Plain note" else "Checklist") }
+                                TextButton(onClick = { store.setColor(n.id, NoteColor.entries.let { e -> if (n.color == null) e.first() else e.getOrNull(n.color.ordinal + 1) }); save() }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)) { Text(n.color?.let { "Colour: ${it.label}" } ?: "Colour") }
                                 TextButton(onClick = { deleteWithUndo(n) }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp).semantics { contentDescription = PinPresentation.deleteDescription(n.text) }) { Text("Delete") }
                             }
                         }
