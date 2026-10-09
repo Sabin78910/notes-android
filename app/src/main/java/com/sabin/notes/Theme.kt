@@ -15,7 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 
-private fun BrandColors.Scheme.toLight(): ColorScheme = lightColorScheme(
+internal fun BrandColors.Scheme.toLight(): ColorScheme = lightColorScheme(
     primary = Color(primary), onPrimary = Color(onPrimary),
     primaryContainer = Color(primaryContainer), onPrimaryContainer = Color(onPrimaryContainer),
     secondary = Color(secondary), onSecondary = Color(onSecondary),
@@ -25,7 +25,7 @@ private fun BrandColors.Scheme.toLight(): ColorScheme = lightColorScheme(
     surfaceVariant = Color(surfaceVariant), onSurfaceVariant = Color(onSurfaceVariant)
 )
 
-private fun BrandColors.Scheme.toDark(): ColorScheme = darkColorScheme(
+internal fun BrandColors.Scheme.toDark(): ColorScheme = darkColorScheme(
     primary = Color(primary), onPrimary = Color(onPrimary),
     primaryContainer = Color(primaryContainer), onPrimaryContainer = Color(onPrimaryContainer),
     secondary = Color(secondary), onSecondary = Color(onSecondary),

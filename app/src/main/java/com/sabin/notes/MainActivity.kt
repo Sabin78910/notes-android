@@ -1,6 +1,7 @@
 package com.sabin.notes
 
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -42,32 +43,41 @@ import java.text.DateFormat
 import java.util.Date
 
 class MainActivity : ComponentActivity() {
+    private var launchAction by mutableStateOf<LaunchAction?>(null)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        launchAction = LaunchAction.fromName(intent.getStringExtra(LaunchAction.EXTRA))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT)
         )
         super.onCreate(savedInstanceState)
+        launchAction = LaunchAction.fromName(intent?.getStringExtra(LaunchAction.EXTRA))
         setContent {
-            NotesTheme { NotesScreen() }
+            NotesTheme { NotesScreen(launchAction, onLaunchActionHandled = { launchAction = null }) }
         }
     }
 }
 
-private const val PREFS = "notes"
-private const val KEY = "data"
+internal const val PREFS = "notes"
+internal const val KEY = "data"
 private const val KEY_LAYOUT = "layout"
 private const val KEY_ONBOARDED = "onboarded"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NotesScreen() {
+fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () -> Unit = {}) {
     val prefs = LocalContext.current.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     val store = remember { NoteStore.deserialize(prefs.getString(KEY, "") ?: "") .also { it.purgeExpired() } }
     var view by remember { mutableStateOf("Notes") }
     var version by remember { mutableIntStateOf(0) }
     var draft by remember { mutableStateOf("") }
     var adding by remember { mutableStateOf(false) }
+    var addAsChecklist by remember { mutableStateOf(false) }
     val onboardingFlag = remember {
         object : Onboarding.Flag {
             override fun isSeen() = prefs.getBoolean(KEY_ONBOARDED, false)
@@ -97,7 +107,19 @@ fun NotesScreen() {
     }
     val dark = isSystemInDarkTheme()
 
-    fun save() { prefs.edit().putString(KEY, store.serialize()).apply(); version++ }
+    val appContext = LocalContext.current.applicationContext
+    fun save() {
+        prefs.edit().putString(KEY, store.serialize()).apply(); version++
+        scope.launch { NotesWidget.refresh(appContext) }
+    }
+
+    LaunchedEffect(launchAction) {
+        if (launchAction != null) {
+            addAsChecklist = launchAction == LaunchAction.NEW_CHECKLIST
+            adding = true
+            onLaunchActionHandled()
+        }
+    }
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) {
@@ -127,16 +149,16 @@ fun NotesScreen() {
         val focus = remember { FocusRequester() }
         LaunchedEffect(Unit) { focus.requestFocus() }
         AlertDialog(
-            onDismissRequest = { adding = false },
-            title = { Text("New note") },
-            text = { OutlinedTextField(draft, { draft = it }, label = { Text("New note") }, modifier = Modifier.fillMaxWidth().focusRequester(focus)) },
+            onDismissRequest = { adding = false; addAsChecklist = false },
+            title = { Text(if (addAsChecklist) "New checklist" else "New note") },
+            text = { OutlinedTextField(draft, { draft = it }, label = { Text(if (addAsChecklist) "One item per line" else "New note") }, modifier = Modifier.fillMaxWidth().focusRequester(focus)) },
             confirmButton = {
                 TextButton(
                     enabled = draft.isNotBlank(),
-                    onClick = { store.add(draft); draft = ""; adding = false; save() }
+                    onClick = { val n = store.add(draft); if (addAsChecklist) store.setChecklist(n.id, true); draft = ""; adding = false; addAsChecklist = false; save() }
                 ) { Text("Add note") }
             },
-            dismissButton = { TextButton(onClick = { adding = false }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { adding = false; addAsChecklist = false }) { Text("Cancel") } }
         )
     }
 
@@ -185,7 +207,7 @@ fun NotesScreen() {
         topBar = { LargeTopAppBar(title = { Text("Notes") }, scrollBehavior = scrollBehavior) },
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = { adding = true },
+                onClick = { addAsChecklist = false; adding = true },
                 icon = { Icon(Icons.Filled.Add, contentDescription = null) },
                 text = { Text("New note") }
             )
