@@ -78,6 +78,12 @@ class NoteStore(initial: List<Note> = emptyList()) {
     /** Sorted distinct tags across notes that are not in Trash. */
     fun allTags(): List<String> = notes.filter { it.trashedAt == null }.flatMap { it.tags }.distinct().sorted()
 
+    /** Snapshot of every note, including archived and trashed ones. */
+    fun all(): List<Note> = notes.toList()
+
+    /** Adds a note from a backup under a fresh id. */
+    fun addImported(note: Note) { notes.add(note.copy(id = nextId++)) }
+
     fun toggleItem(id: Long, index: Int) {
         val i = notes.indexOfFirst { it.id == id }
         if (i < 0 || !notes[i].checklist || index !in Checklist.items(notes[i].text).indices) return
