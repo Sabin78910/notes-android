@@ -91,4 +91,20 @@ class NoteStoreTest {
         assertEquals("old\ttext", n.first { it.id == 1L }.text)
         assertTrue(n.first { it.id == 1L }.pinned)
     }
+
+    @Test fun newestFirstIsDefaultAndKeepsPinnedOnTop() {
+        val s = NoteStore(); val a = s.add("a"); s.add("b"); s.add("c"); s.togglePin(a.id)
+        assertEquals(listOf("a", "c", "b"), s.visible().map { it.text })
+        assertEquals(listOf("a", "c", "b"), s.visible(newestFirst = true).map { it.text })
+    }
+
+    @Test fun oldestFirstKeepsPinnedOnTop() {
+        val s = NoteStore(); s.add("a"); s.add("b"); val c = s.add("c"); s.togglePin(c.id)
+        assertEquals(listOf("c", "a", "b"), s.visible(newestFirst = false).map { it.text })
+    }
+
+    @Test fun oldestFirstWithSearch() {
+        val s = NoteStore(); s.add("x1"); s.add("y"); s.add("x2")
+        assertEquals(listOf("x1", "x2"), s.visible("x", newestFirst = false).map { it.text })
+    }
 }

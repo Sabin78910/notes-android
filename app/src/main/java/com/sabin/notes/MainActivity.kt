@@ -34,11 +34,12 @@ fun NotesScreen() {
     var version by remember { mutableIntStateOf(0) }
     var draft by remember { mutableStateOf("") }
     var query by remember { mutableStateOf("") }
+    var newestFirst by remember { mutableStateOf(true) }
     var editing by remember { mutableStateOf<Note?>(null) }
     var editText by remember { mutableStateOf("") }
     val snackbarHost = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    val notes = remember(version, query) { store.visible(query) }
+    val notes = remember(version, query, newestFirst) { store.visible(query, newestFirst) }
 
     fun save() { prefs.edit().putString(KEY, store.serialize()).apply(); version++ }
 
@@ -72,7 +73,9 @@ fun NotesScreen() {
     ) { padding ->
         Column(Modifier.padding(padding).padding(16.dp)) {
             OutlinedTextField(query, { query = it }, label = { Text("Search") }, modifier = Modifier.fillMaxWidth())
-            Spacer(Modifier.height(8.dp))
+            TextButton(onClick = { newestFirst = !newestFirst }) {
+                Text(if (newestFirst) "Sort: Newest first" else "Sort: Oldest first")
+            }
             OutlinedTextField(draft, { draft = it }, label = { Text("New note") }, modifier = Modifier.fillMaxWidth())
             Button(
                 onClick = { if (draft.isNotBlank()) { store.add(draft); draft = ""; save() } },
