@@ -42,7 +42,7 @@ jobs:
           KEYSTORE_FILE="$RUNNER_TEMP/upload.jks" ./gradlew bundleRelease --no-daemon
       - if: env.HAS_SECRETS == 'true'
         name: Keep signed AAB (for the first manual upload in Play Console)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: app-release-aab
           path: app/build/outputs/bundle/release/app-release.aab
