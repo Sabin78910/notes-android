@@ -68,7 +68,7 @@ jobs:
         run: |
           gh issue edit "$N" --remove-label ready --add-label in-progress
           git checkout -b "agent/issue-$N"
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with: { distribution: temurin, java-version: "17" }
       - uses: gradle/actions/setup-gradle@v4
       - id: claude
