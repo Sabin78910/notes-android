@@ -22,7 +22,7 @@ jobs:
       - if: env.HAS_SECRETS != 'true'
         run: echo "::notice::Signing key not configured yet — run devops-hq/agent/create-upload-key.sh"
       - if: env.HAS_SECRETS == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - if: env.HAS_SECRETS == 'true'
         uses: actions/setup-java@v4
         with:
