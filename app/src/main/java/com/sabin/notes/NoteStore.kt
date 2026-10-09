@@ -20,6 +20,12 @@ class NoteStore(initial: List<Note> = emptyList()) {
 
     fun delete(id: Long) { notes.removeAll { it.id == id } }
 
+    /** Re-inserts a previously deleted note (same id, so order and pin are preserved). */
+    fun restore(note: Note) {
+        if (notes.none { it.id == note.id }) notes.add(note)
+        if (note.id >= nextId) nextId = note.id + 1
+    }
+
     fun togglePin(id: Long) {
         val i = notes.indexOfFirst { it.id == id }
         if (i >= 0) notes[i] = notes[i].copy(pinned = !notes[i].pinned)

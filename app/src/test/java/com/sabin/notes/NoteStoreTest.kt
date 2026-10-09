@@ -49,4 +49,25 @@ class NoteStoreTest {
         val s = NoteStore(); val a = s.add("old"); s.edit(a.id, "new")
         assertEquals("new", NoteStore.deserialize(s.serialize()).visible().single().text)
     }
+
+    @Test fun restoreBringsBackDeletedNoteWithPin() {
+        val s = NoteStore(); val a = s.add("keep"); s.togglePin(a.id)
+        val pinned = s.visible().single()
+        s.delete(a.id)
+        assertTrue(s.visible().isEmpty())
+        s.restore(pinned)
+        assertEquals(listOf(pinned), s.visible())
+    }
+
+    @Test fun restoreDoesNotDuplicateExistingNote() {
+        val s = NoteStore(); val a = s.add("x")
+        s.restore(a)
+        assertEquals(1, s.visible().size)
+    }
+
+    @Test fun addAfterRestoreGetsFreshId() {
+        val s = NoteStore(); val a = s.add("x")
+        s.delete(a.id); s.restore(a)
+        assertTrue(s.add("y").id > a.id)
+    }
 }
