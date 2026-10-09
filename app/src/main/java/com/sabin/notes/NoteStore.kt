@@ -4,7 +4,10 @@ data class Note(val id: Long, val text: String, val pinned: Boolean = false, val
     val checklist: Boolean = false,
     /** Indices (into [Checklist.items]) of ticked items. */
     val checked: Set<Int> = emptySet(),
-    val color: NoteColor? = null
+    val color: NoteColor? = null,
+    val archived: Boolean = false,
+    /** Epoch millis when moved to Trash; null if not trashed. */
+    val trashedAt: Long? = null
 )
 
 /** Checklist helpers: each non-blank line of a checklist note is one item. */
@@ -60,13 +63,43 @@ class NoteStore(initial: List<Note> = emptyList()) {
         notes[i] = notes[i].copy(checked = if (index in c) c - index else c + index)
     }
 
-    fun delete(id: Long) { notes.removeAll { it.id == id } }
+    /** Moves the note to Trash; it is purged after [TRASH_RETENTION_MS]. */
+    fun delete(id: Long, now: Long = System.currentTimeMillis()) {
+        val i = notes.indexOfFirst { it.id == id }
+        if (i >= 0) notes[i] = notes[i].copy(trashedAt = now, archived = false)
+    }
 
-    /** Re-inserts a previously deleted note (same id, so order and pin are preserved). */
+    /** Brings a deleted note back (from Trash, or re-inserts it if it is gone entirely). */
     fun restore(note: Note) {
-        if (notes.none { it.id == note.id }) notes.add(note)
+        val i = notes.indexOfFirst { it.id == note.id }
+        if (i < 0) notes.add(note.copy(trashedAt = null)) else if (notes[i].trashedAt != null) notes[i] = notes[i].copy(trashedAt = null)
         if (note.id >= nextId) nextId = note.id + 1
     }
+
+    fun restoreFromTrash(id: Long) {
+        val i = notes.indexOfFirst { it.id == id }
+        if (i >= 0) notes[i] = notes[i].copy(trashedAt = null)
+    }
+
+    fun archive(id: Long) = setArchived(id, true)
+
+    fun unarchive(id: Long) = setArchived(id, false)
+
+    private fun setArchived(id: Long, on: Boolean) {
+        val i = notes.indexOfFirst { it.id == id }
+        if (i >= 0 && notes[i].trashedAt == null) notes[i] = notes[i].copy(archived = on)
+    }
+
+    fun emptyTrash() { notes.removeAll { it.trashedAt != null } }
+
+    /** Permanently removes notes trashed for more than 30 days. */
+    fun purgeExpired(now: Long = System.currentTimeMillis()) {
+        notes.removeAll { n -> n.trashedAt?.let { now - it > TRASH_RETENTION_MS } == true }
+    }
+
+    fun archived(): List<Note> = notes.filter { it.archived && it.trashedAt == null }.sortedByDescending { it.id }
+
+    fun trashed(): List<Note> = notes.filter { it.trashedAt != null }.sortedByDescending { it.trashedAt }
 
     fun togglePin(id: Long) {
         val i = notes.indexOfFirst { it.id == id }
@@ -75,24 +108,26 @@ class NoteStore(initial: List<Note> = emptyList()) {
 
     /** Pinned first, then newest (or oldest) first; filtered by case-insensitive query. */
     fun visible(query: String = "", newestFirst: Boolean = true, color: NoteColor? = null): List<Note> =
-        notes.filter { it.text.contains(query.trim(), ignoreCase = true) && (color == null || it.color == color) }
+        notes.filter { !it.archived && it.trashedAt == null && it.text.contains(query.trim(), ignoreCase = true) && (color == null || it.color == color) }
             .sortedWith(
                 compareByDescending<Note> { it.pinned }
                     .let { if (newestFirst) it.thenByDescending { n -> n.id } else it.thenBy { n -> n.id } }
             )
 
     fun serialize(): String = notes.joinToString("\n") {
-        "${it.id}\t${it.pinned}:${it.createdAt}:${it.checklist}:${it.checked.sorted().joinToString(",")}:${it.color?.name.orEmpty()}\t${it.text.replace("\\", "\\\\").replace("\n", "\\n")}"
+        "${it.id}\t${it.pinned}:${it.createdAt}:${it.checklist}:${it.checked.sorted().joinToString(",")}:${it.color?.name.orEmpty()}:${it.archived}:${it.trashedAt ?: ""}\t${it.text.replace("\\", "\\\\").replace("\n", "\\n")}"
     }
 
     companion object {
+        const val TRASH_RETENTION_MS = 30L * 24 * 60 * 60 * 1000
+
         fun deserialize(data: String): NoteStore = NoteStore(
             data.lines().filter { it.isNotBlank() }.mapNotNull { line ->
                 val parts = line.split("\t", limit = 3)
                 if (parts.size < 3) return@mapNotNull null
                 val text = parts[2].replace(Regex("\\\\(.)")) { if (it.groupValues[1] == "n") "\n" else it.groupValues[1] }
                 // Old data has just "pinned"; new data has "pinned:createdAt" (0 = unknown).
-                val meta = parts[1].split(":", limit = 5)
+                val meta = parts[1].split(":", limit = 7)
                 Note(
                     parts[0].toLongOrNull() ?: return@mapNotNull null,
                     text,
@@ -100,7 +135,9 @@ class NoteStore(initial: List<Note> = emptyList()) {
                     meta.getOrNull(1)?.toLongOrNull() ?: 0L,
                     meta.getOrNull(2).toBoolean(),
                     meta.getOrNull(3).orEmpty().split(",").mapNotNull { it.toIntOrNull() }.toSet(),
-                    NoteColor.fromName(meta.getOrNull(4))
+                    NoteColor.fromName(meta.getOrNull(4)),
+                    meta.getOrNull(5).toBoolean(),
+                    meta.getOrNull(6)?.toLongOrNull()
                 )
             }
         )

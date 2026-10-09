@@ -107,4 +107,62 @@ class NoteStoreTest {
         val s = NoteStore(); s.add("x1"); s.add("y"); s.add("x2")
         assertEquals(listOf("x1", "x2"), s.visible("x", newestFirst = false).map { it.text })
     }
+
+    @Test fun archiveHidesFromVisibleAndUnarchiveBringsBack() {
+        val s = NoteStore(); val a = s.add("x")
+        s.archive(a.id)
+        assertTrue(s.visible().isEmpty())
+        assertEquals(listOf("x"), s.archived().map { it.text })
+        s.unarchive(a.id)
+        assertEquals(listOf("x"), s.visible().map { it.text })
+        assertTrue(s.archived().isEmpty())
+    }
+
+    @Test fun deleteMovesToTrashAndRestoreFromTrashBringsBack() {
+        val s = NoteStore(); val a = s.add("x")
+        s.delete(a.id, now = 100L)
+        assertTrue(s.visible().isEmpty())
+        assertEquals(listOf("x"), s.trashed().map { it.text })
+        s.restoreFromTrash(a.id)
+        assertEquals(listOf("x"), s.visible().map { it.text })
+        assertTrue(s.trashed().isEmpty())
+    }
+
+    @Test fun cannotArchiveTrashedNote() {
+        val s = NoteStore(); val a = s.add("x")
+        s.delete(a.id); s.archive(a.id)
+        assertTrue(s.archived().isEmpty())
+    }
+
+    @Test fun emptyTrashRemovesOnlyTrashed() {
+        val s = NoteStore(); val a = s.add("a"); s.add("b")
+        s.delete(a.id)
+        s.emptyTrash()
+        assertTrue(s.trashed().isEmpty())
+        assertEquals(listOf("b"), s.visible().map { it.text })
+    }
+
+    @Test fun purgeRemovesNotesTrashedOverThirtyDays() {
+        val day = 24L * 60 * 60 * 1000
+        val s = NoteStore(); val old = s.add("old"); val recent = s.add("recent")
+        s.delete(old.id, now = 0L); s.delete(recent.id, now = 10 * day)
+        s.purgeExpired(now = 30 * day + 1)
+        assertEquals(listOf("recent"), s.trashed().map { it.text })
+    }
+
+    @Test fun purgeKeepsNoteTrashedExactlyThirtyDays() {
+        val s = NoteStore(); val a = s.add("x")
+        s.delete(a.id, now = 0L)
+        s.purgeExpired(now = NoteStore.TRASH_RETENTION_MS)
+        assertEquals(1, s.trashed().size)
+    }
+
+    @Test fun archiveAndTrashSurviveSerialization() {
+        val s = NoteStore(); val a = s.add("a"); val b = s.add("b"); s.add("c")
+        s.archive(a.id); s.delete(b.id, now = 777L)
+        val r = NoteStore.deserialize(s.serialize())
+        assertEquals(listOf("a"), r.archived().map { it.text })
+        assertEquals(777L, r.trashed().single().trashedAt)
+        assertEquals(listOf("c"), r.visible().map { it.text })
+    }
 }
