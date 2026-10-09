@@ -14,8 +14,14 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
+import androidx.compose.foundation.lazy.staggeredgrid.items
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
@@ -48,6 +54,7 @@ class MainActivity : ComponentActivity() {
 
 private const val PREFS = "notes"
 private const val KEY = "data"
+private const val KEY_LAYOUT = "layout"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,6 +66,7 @@ fun NotesScreen() {
     var draft by remember { mutableStateOf("") }
     var adding by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
+    var layout by remember { mutableStateOf(LayoutMode.fromName(prefs.getString(KEY_LAYOUT, null))) }
     var newestFirst by remember { mutableStateOf(true) }
     var colorFilter by remember { mutableStateOf<NoteColor?>(null) }
     var tagFilter by remember { mutableStateOf<String?>(null) }
@@ -167,8 +175,14 @@ fun NotesScreen() {
         },
         snackbarHost = { SnackbarHost(snackbarHost) }
     ) { padding ->
-        LazyColumn(Modifier.padding(padding).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 88.dp)) {
-          item { Column {
+        LazyVerticalStaggeredGrid(
+            StaggeredGridCells.Fixed(layout.columns),
+            Modifier.padding(padding).padding(horizontal = 16.dp),
+            verticalItemSpacing = 12.dp,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(bottom = 88.dp)
+        ) {
+          item(span = StaggeredGridItemSpan.FullLine) { Column {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("Notes", "Archive", "Trash").forEach { v ->
                     FilterChip(view == v, { view = v }, label = { Text(v) })
@@ -183,8 +197,14 @@ fun NotesScreen() {
                 TextButton(onClick = { importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Restore") }
             }
             OutlinedTextField(query, { query = it }, label = { Text("Search") }, modifier = Modifier.fillMaxWidth())
-            TextButton(onClick = { newestFirst = !newestFirst }, modifier = Modifier.heightIn(min = 48.dp)) {
-                Text(if (newestFirst) "Sort: Newest first" else "Sort: Oldest first")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = { newestFirst = !newestFirst }, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text(if (newestFirst) "Sort: Newest first" else "Sort: Oldest first")
+                }
+                TextButton(
+                    onClick = { layout = layout.toggled(); prefs.edit().putString(KEY_LAYOUT, layout.name).apply() },
+                    modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = layout.toggleDescription() }
+                ) { Text(if (layout == LayoutMode.GRID) "Grid view" else "List view") }
             }
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(colorFilter == null, { colorFilter = null }, label = { Text("All") })
@@ -206,10 +226,24 @@ fun NotesScreen() {
                 }
             }
           } }
+                if (notes.isEmpty()) {
+                    item(span = StaggeredGridItemSpan.FullLine) {
+                        val filtered = query.isNotBlank() || colorFilter != null || tagFilter != null
+                        Column(Modifier.fillMaxWidth().padding(vertical = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(if (view == "Trash") "🗑️" else if (view == "Archive") "📦" else if (filtered) "🔍" else "📝", style = MaterialTheme.typography.displayLarge)
+                            Spacer(Modifier.height(12.dp))
+                            Text(EmptyState.message(view, filtered), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+                        }
+                    }
+                }
                 items(notes, key = { it.id }) { n ->
                     val fg = n.color?.let { Color(it.text(dark)) } ?: Color.Unspecified
                     Card(
-                        Modifier.fillMaxWidth(),
+                        Modifier.fillMaxWidth().animateItem(
+                            fadeInSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                            placementSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow),
+                            fadeOutSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                        ),
                         colors = n.color?.let { CardDefaults.cardColors(containerColor = Color(it.background(dark)), contentColor = fg) } ?: CardDefaults.cardColors()
                     ) {
                         Column(Modifier.padding(16.dp)) {
@@ -219,7 +253,7 @@ fun NotesScreen() {
                             if (n.checklist) {
                                 val p = Checklist.progress(n)
                                 Text(p.label, style = MaterialTheme.typography.labelMedium)
-                                Checklist.items(n.text).forEachIndexed { idx, item ->
+                                Checklist.items(n.text).take(NotePreview.MAX_ITEMS).forEachIndexed { idx, item ->
                                     val ticked = idx in n.checked
                                     Row(
                                         Modifier.fillMaxWidth().heightIn(min = 48.dp)
@@ -231,10 +265,11 @@ fun NotesScreen() {
                                         Text(item, textDecoration = if (ticked) TextDecoration.LineThrough else null)
                                     }
                                 }
+                                if (NotePreview.hiddenItems(n) > 0) Text("+${NotePreview.hiddenItems(n)} more", style = MaterialTheme.typography.labelMedium)
                                 if (Checklist.shouldCelebrate(p, animationsEnabled)) {
                                     Text("🎉 All done!", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
                                 }
-                            } else Text(n.text)
+                            } else Text(NotePreview.text(n), maxLines = NotePreview.MAX_LINES, overflow = TextOverflow.Ellipsis)
                             if (n.createdAt > 0) {
                                 Text(
                                     "Created " + DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(n.createdAt)),
