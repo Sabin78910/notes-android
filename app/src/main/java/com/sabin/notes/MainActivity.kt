@@ -28,6 +28,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -55,6 +57,7 @@ class MainActivity : ComponentActivity() {
 private const val PREFS = "notes"
 private const val KEY = "data"
 private const val KEY_LAYOUT = "layout"
+private const val KEY_ONBOARDED = "onboarded"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,6 +68,13 @@ fun NotesScreen() {
     var version by remember { mutableIntStateOf(0) }
     var draft by remember { mutableStateOf("") }
     var adding by remember { mutableStateOf(false) }
+    val onboardingFlag = remember {
+        object : Onboarding.Flag {
+            override fun isSeen() = prefs.getBoolean(KEY_ONBOARDED, false)
+            override fun markSeen() { prefs.edit().putBoolean(KEY_ONBOARDED, true).apply() }
+        }
+    }
+    var onboarding by remember { mutableStateOf(Onboarding.shouldShow(onboardingFlag)) }
     var query by remember { mutableStateOf("") }
     var layout by remember { mutableStateOf(LayoutMode.fromName(prefs.getString(KEY_LAYOUT, null))) }
     var newestFirst by remember { mutableStateOf(true) }
@@ -108,11 +118,18 @@ fun NotesScreen() {
     }
 
 
+    if (onboarding) {
+        OnboardingScreen(onDone = { Onboarding.finish(onboardingFlag); onboarding = false; adding = true })
+        return
+    }
+
     if (adding) {
+        val focus = remember { FocusRequester() }
+        LaunchedEffect(Unit) { focus.requestFocus() }
         AlertDialog(
             onDismissRequest = { adding = false },
             title = { Text("New note") },
-            text = { OutlinedTextField(draft, { draft = it }, label = { Text("New note") }, modifier = Modifier.fillMaxWidth()) },
+            text = { OutlinedTextField(draft, { draft = it }, label = { Text("New note") }, modifier = Modifier.fillMaxWidth().focusRequester(focus)) },
             confirmButton = {
                 TextButton(
                     enabled = draft.isNotBlank(),
