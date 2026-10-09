@@ -49,7 +49,8 @@ private const val KEY = "data"
 @Composable
 fun NotesScreen() {
     val prefs = LocalContext.current.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-    val store = remember { NoteStore.deserialize(prefs.getString(KEY, "") ?: "") }
+    val store = remember { NoteStore.deserialize(prefs.getString(KEY, "") ?: "") .also { it.purgeExpired() } }
+    var view by remember { mutableStateOf("Notes") }
     var version by remember { mutableIntStateOf(0) }
     var draft by remember { mutableStateOf("") }
     var query by remember { mutableStateOf("") }
@@ -61,7 +62,13 @@ fun NotesScreen() {
     val animationsEnabled = Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) != 0f
     val snackbarHost = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    val notes = remember(version, query, newestFirst, colorFilter) { store.visible(query, newestFirst, colorFilter) }
+    val notes = remember(version, query, newestFirst, colorFilter, view) {
+        when (view) {
+            "Archive" -> store.archived()
+            "Trash" -> store.trashed()
+            else -> store.visible(query, newestFirst, colorFilter)
+        }
+    }
     val dark = isSystemInDarkTheme()
 
     fun save() { prefs.edit().putString(KEY, store.serialize()).apply(); version++ }
@@ -95,6 +102,15 @@ fun NotesScreen() {
         snackbarHost = { SnackbarHost(snackbarHost) }
     ) { padding ->
         Column(Modifier.padding(padding).padding(16.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("Notes", "Archive", "Trash").forEach { v ->
+                    FilterChip(view == v, { view = v }, label = { Text(v) })
+                }
+            }
+            if (view == "Trash") {
+                TextButton(onClick = { store.emptyTrash(); save() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Empty trash") }
+                Text("Notes in Trash are deleted after 30 days.", style = MaterialTheme.typography.bodySmall)
+            }
             OutlinedTextField(query, { query = it }, label = { Text("Search") }, modifier = Modifier.fillMaxWidth())
             TextButton(onClick = { newestFirst = !newestFirst }, modifier = Modifier.heightIn(min = 48.dp)) {
                 Text(if (newestFirst) "Sort: Newest first" else "Sort: Oldest first")
@@ -151,11 +167,16 @@ fun NotesScreen() {
                                 )
                             }
                             Row {
+                                if (view == "Trash") {
+                                    TextButton(onClick = { store.restoreFromTrash(n.id); save() }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)) { Text("Restore") }
+                                } else {
                                 TextButton(onClick = { editText = n.text; editing = n }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp).semantics { contentDescription = PinPresentation.editDescription(n.text) }) { Text("Edit") }
                                 TextButton(onClick = { store.togglePin(n.id); save() }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp).semantics { contentDescription = PinPresentation.pinDescription(n.pinned, n.text) }) { Text(PinPresentation.buttonLabel(n.pinned)) }
                                 TextButton(onClick = { store.setChecklist(n.id, !n.checklist); save() }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)) { Text(if (n.checklist) "Plain note" else "Checklist") }
                                 TextButton(onClick = { store.setColor(n.id, NoteColor.entries.let { e -> if (n.color == null) e.first() else e.getOrNull(n.color.ordinal + 1) }); save() }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)) { Text(n.color?.let { "Colour: ${it.label}" } ?: "Colour") }
                                 TextButton(onClick = { deleteWithUndo(n) }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp).semantics { contentDescription = PinPresentation.deleteDescription(n.text) }) { Text("Delete") }
+                                TextButton(onClick = { if (n.archived) store.unarchive(n.id) else store.archive(n.id); save() }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)) { Text(if (n.archived) "Unarchive" else "Archive") }
+                                }
                             }
                         }
                     }
