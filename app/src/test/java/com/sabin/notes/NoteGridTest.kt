@@ -52,4 +52,29 @@ class NoteGridTest {
         assertEquals("Trash is empty", EmptyState.message("Trash", false))
         assertNull(EmptyState.message("Notes", false).takeIf { it.isEmpty() })
     }
+
+    @Test fun sortToggleDescriptionsAndGlyphs() {
+        assertEquals("Sort: oldest first", SortOrder.description(true))
+        assertEquals("Sort: newest first", SortOrder.description(false))
+        assertEquals("↓", SortOrder.glyph(true))
+        assertEquals("↑", SortOrder.glyph(false))
+    }
+
+    @Test fun emptyStateOffersNewNoteOnlyOnPlainNotesView() {
+        assertEquals(true, EmptyState.showNewNoteAction("Notes", false))
+        assertEquals(false, EmptyState.showNewNoteAction("Notes", true))
+        assertEquals(false, EmptyState.showNewNoteAction("Trash", false))
+        assertEquals(false, EmptyState.showNewNoteAction("Archive", false))
+    }
+
+    @Test fun emptyStateHelperTextAndIcons() {
+        assertEquals("Capture ideas, lists and reminders.", EmptyState.helper("Notes", false))
+        assertEquals("Try a different search or clear the filters.", EmptyState.helper("Notes", true))
+        assertEquals("Archived notes show up here.", EmptyState.helper("Archive", false))
+        assertEquals("Deleted notes stay here for 30 days.", EmptyState.helper("Trash", false))
+        assertEquals("📝", EmptyState.icon("Notes", false))
+        assertEquals("🔍", EmptyState.icon("Notes", true))
+        assertEquals("📦", EmptyState.icon("Archive", false))
+        assertEquals("🗑️", EmptyState.icon("Trash", false))
+    }
 }
