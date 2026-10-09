@@ -4,7 +4,9 @@ import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import android.provider.Settings
 import androidx.compose.foundation.clickable
@@ -76,6 +78,25 @@ fun NotesScreen() {
 
     fun save() { prefs.edit().putString(KEY, store.serialize()).apply(); version++ }
 
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) {
+            val ok = runCatching { resolver.openOutputStream(uri, "wt")!!.use { it.write(Backup.export(store.all()).toByteArray()) } }.isSuccess
+            scope.launch { snackbarHost.showSnackbar(if (ok) "Backup saved" else "Could not save backup") }
+        }
+    }
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            val text = runCatching { resolver.openInputStream(uri)!!.use { String(it.readBytes()) } }.getOrNull()
+            val msg = when (val r = text?.let { Backup.import(store, it) }) {
+                is Backup.Result.Imported -> { save(); "Restored ${r.added} new notes" }
+                is Backup.Result.Error -> r.message
+                null -> "Could not read file"
+            }
+            scope.launch { snackbarHost.showSnackbar(msg) }
+        }
+    }
+
+
     editing?.let { n ->
         AlertDialog(
             onDismissRequest = { editing = null },
@@ -128,6 +149,10 @@ fun NotesScreen() {
             if (view == "Trash") {
                 TextButton(onClick = { store.emptyTrash(); save() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Empty trash") }
                 Text("Notes in Trash are deleted after 30 days.", style = MaterialTheme.typography.bodySmall)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = { exportLauncher.launch("notes-backup.json") }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Back up") }
+                TextButton(onClick = { importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Restore") }
             }
             OutlinedTextField(query, { query = it }, label = { Text("Search") }, modifier = Modifier.fillMaxWidth())
             TextButton(onClick = { newestFirst = !newestFirst }, modifier = Modifier.heightIn(min = 48.dp)) {
