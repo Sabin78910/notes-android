@@ -9,7 +9,9 @@ data class Note(val id: Long, val text: String, val pinned: Boolean = false, val
     /** Epoch millis when moved to Trash; null if not trashed. */
     val trashedAt: Long? = null,
     /** Lowercase labels, see [Tags]. */
-    val tags: Set<String> = emptySet()
+    val tags: Set<String> = emptySet(),
+    /** Epoch millis of the reminder; null if none. */
+    val remindAt: Long? = null
 )
 
 object Tags {
@@ -63,6 +65,16 @@ class NoteStore(initial: List<Note> = emptyList()) {
     fun setColor(id: Long, color: NoteColor?) {
         val i = notes.indexOfFirst { it.id == id }
         if (i >= 0) notes[i] = notes[i].copy(color = color)
+    }
+
+    fun setReminder(id: Long, at: Long) {
+        val i = notes.indexOfFirst { it.id == id }
+        if (i >= 0) notes[i] = notes[i].copy(remindAt = at)
+    }
+
+    fun clearReminder(id: Long) {
+        val i = notes.indexOfFirst { it.id == id }
+        if (i >= 0) notes[i] = notes[i].copy(remindAt = null)
     }
 
     fun addTags(id: Long, raw: String) {
@@ -143,7 +155,7 @@ class NoteStore(initial: List<Note> = emptyList()) {
             )
 
     fun serialize(): String = notes.joinToString("\n") {
-        "${it.id}\t${it.pinned}:${it.createdAt}:${it.checklist}:${it.checked.sorted().joinToString(",")}:${it.color?.name.orEmpty()}:${it.archived}:${it.trashedAt ?: ""}:${it.tags.joinToString(",")}\t${it.text.replace("\\", "\\\\").replace("\n", "\\n")}"
+        "${it.id}\t${it.pinned}:${it.createdAt}:${it.checklist}:${it.checked.sorted().joinToString(",")}:${it.color?.name.orEmpty()}:${it.archived}:${it.trashedAt ?: ""}:${it.tags.joinToString(",")}:${it.remindAt ?: ""}\t${it.text.replace("\\", "\\\\").replace("\n", "\\n")}"
     }
 
     companion object {
@@ -155,7 +167,7 @@ class NoteStore(initial: List<Note> = emptyList()) {
                 if (parts.size < 3) return@mapNotNull null
                 val text = parts[2].replace(Regex("\\\\(.)")) { if (it.groupValues[1] == "n") "\n" else it.groupValues[1] }
                 // Old data has just "pinned"; new data has "pinned:createdAt" (0 = unknown).
-                val meta = parts[1].split(":", limit = 8)
+                val meta = parts[1].split(":", limit = 9)
                 Note(
                     parts[0].toLongOrNull() ?: return@mapNotNull null,
                     text,
@@ -166,7 +178,8 @@ class NoteStore(initial: List<Note> = emptyList()) {
                     NoteColor.fromName(meta.getOrNull(4)),
                     meta.getOrNull(5).toBoolean(),
                     meta.getOrNull(6)?.toLongOrNull(),
-                    Tags.parse(meta.getOrNull(7).orEmpty())
+                    Tags.parse(meta.getOrNull(7).orEmpty()),
+                    meta.getOrNull(8)?.toLongOrNull()
                 )
             }
         )

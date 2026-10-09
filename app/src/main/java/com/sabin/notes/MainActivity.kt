@@ -44,10 +44,12 @@ import java.util.Date
 
 class MainActivity : ComponentActivity() {
     private var launchAction by mutableStateOf<LaunchAction?>(null)
+    private var openNoteId by mutableStateOf<Long?>(null)
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         launchAction = LaunchAction.fromName(intent.getStringExtra(LaunchAction.EXTRA))
+        openNoteId = intent.getLongExtra(EXTRA_NOTE_ID, -1L).takeIf { it >= 0 }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -57,8 +59,9 @@ class MainActivity : ComponentActivity() {
         )
         super.onCreate(savedInstanceState)
         launchAction = LaunchAction.fromName(intent?.getStringExtra(LaunchAction.EXTRA))
+        openNoteId = intent?.getLongExtra(EXTRA_NOTE_ID, -1L)?.takeIf { it >= 0 }
         setContent {
-            NotesTheme { NotesScreen(launchAction, onLaunchActionHandled = { launchAction = null }) }
+            NotesTheme { NotesScreen(launchAction, onLaunchActionHandled = { launchAction = null }, openNoteId, onNoteOpened = { openNoteId = null }) }
         }
     }
 }
@@ -70,7 +73,7 @@ private const val KEY_ONBOARDED = "onboarded"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () -> Unit = {}) {
+fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () -> Unit = {}, openNoteId: Long? = null, onNoteOpened: () -> Unit = {}) {
     val prefs = LocalContext.current.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     val store = remember { NoteStore.deserialize(prefs.getString(KEY, "") ?: "") .also { it.purgeExpired() } }
     var view by remember { mutableStateOf("Notes") }
@@ -108,9 +111,31 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
     val dark = isSystemInDarkTheme()
 
     val appContext = LocalContext.current.applicationContext
+    val scheduler = remember { ReminderScheduler(AndroidAlarms(appContext)) }
+    var remindersOn by remember { mutableStateOf(prefs.getBoolean(KEY_REMINDERS, false) && ReminderPermission.granted(appContext)) }
+    var explainReminders by remember { mutableStateOf(false) }
+    var reminderFor by remember { mutableStateOf<Note?>(null) }
+    var pickingFor by remember { mutableStateOf<Note?>(null) }
+    fun setRemindersEnabled(on: Boolean) {
+        remindersOn = on; prefs.edit().putBoolean(KEY_REMINDERS, on).apply()
+        if (on) scheduler.rescheduleAll(store.all()) else scheduler.cancelAll(store.all())
+    }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        setRemindersEnabled(granted)
+        if (granted) pickingFor = reminderFor else scope.launch { snackbarHost.showSnackbar("Reminders need notification permission") }
+        reminderFor = null
+    }
     fun save() {
         prefs.edit().putString(KEY, store.serialize()).apply(); version++
         scope.launch { NotesWidget.refresh(appContext) }
+        if (remindersOn) scheduler.rescheduleAll(store.all()) else scheduler.cancelAll(store.all())
+    }
+
+    LaunchedEffect(openNoteId) {
+        if (openNoteId != null) {
+            store.all().firstOrNull { it.id == openNoteId && it.trashedAt == null }?.let { editText = it.text; editing = it }
+            onNoteOpened()
+        }
     }
 
     LaunchedEffect(launchAction) {
@@ -192,6 +217,46 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
         )
     }
 
+    if (explainReminders) {
+        AlertDialog(
+            onDismissRequest = { explainReminders = false; reminderFor = null },
+            title = { Text("Allow reminders?") },
+            text = { Text("Notes needs permission to show notifications so it can remind you about a note at the time you choose. You can turn reminders off any time.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    explainReminders = false
+                    if (ReminderPermission.granted(appContext)) { setRemindersEnabled(true); pickingFor = reminderFor; reminderFor = null }
+                    else permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                }) { Text("Continue") }
+            },
+            dismissButton = { TextButton(onClick = { explainReminders = false; reminderFor = null }) { Text("Not now") } }
+        )
+    }
+
+    pickingFor?.let { n ->
+        var date by remember { mutableStateOf(true) }
+        val dateState = rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
+        val timeState = rememberTimePickerState()
+        AlertDialog(
+            onDismissRequest = { pickingFor = null },
+            title = { Text(if (date) "Reminder date" else "Reminder time") },
+            text = { if (date) DatePicker(dateState, showModeToggle = false) else TimePicker(timeState) },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (date) date = false else {
+                        val utc = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).apply { timeInMillis = dateState.selectedDateMillis ?: System.currentTimeMillis() }
+                        val cal = java.util.Calendar.getInstance().apply {
+                            set(utc.get(java.util.Calendar.YEAR), utc.get(java.util.Calendar.MONTH), utc.get(java.util.Calendar.DAY_OF_MONTH), timeState.hour, timeState.minute, 0)
+                        }
+                        if (cal.timeInMillis <= System.currentTimeMillis()) scope.launch { snackbarHost.showSnackbar("Pick a time in the future") }
+                        else { store.setReminder(n.id, cal.timeInMillis); pickingFor = null; save() }
+                    }
+                }) { Text(if (date) "Next" else "Set") }
+            },
+            dismissButton = { TextButton(onClick = { pickingFor = null }) { Text("Cancel") } }
+        )
+    }
+
     fun deleteWithUndo(n: Note) {
         store.delete(n.id); save()
         scope.launch {
@@ -230,6 +295,10 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
             if (view == "Trash") {
                 TextButton(onClick = { store.emptyTrash(); save() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Empty trash") }
                 Text("Notes in Trash are deleted after 30 days.", style = MaterialTheme.typography.bodySmall)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Reminders")
+                Switch(remindersOn, { on -> if (on) explainReminders = true else setRemindersEnabled(false) })
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = { exportLauncher.launch("notes-backup.json") }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Back up") }
@@ -315,6 +384,9 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }
+                            n.remindAt?.let {
+                                Text("⏰ " + DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(it)), style = MaterialTheme.typography.labelMedium)
+                            }
                             if (n.tags.isNotEmpty()) {
                                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     n.tags.forEach { t ->
@@ -335,6 +407,10 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
                                 TextButton(onClick = { store.setChecklist(n.id, !n.checklist); save() }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)) { Text(if (n.checklist) "Plain note" else "Checklist") }
                                 TextButton(onClick = { store.setColor(n.id, NoteColor.entries.let { e -> if (n.color == null) e.first() else e.getOrNull(n.color.ordinal + 1) }); save() }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)) { Text(n.color?.let { "Colour: ${it.label}" } ?: "Colour") }
                                 TextButton(onClick = { tagText = ""; tagging = n }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)) { Text("Tag") }
+                                TextButton(
+                                    onClick = { if (n.remindAt != null) { store.clearReminder(n.id); save() } else if (remindersOn) pickingFor = n else { reminderFor = n; explainReminders = true } },
+                                    modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)
+                                ) { Text(if (n.remindAt != null) "Clear reminder" else "Remind") }
                                 TextButton(onClick = { deleteWithUndo(n) }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp).semantics { contentDescription = PinPresentation.deleteDescription(n.text) }) { Text("Delete") }
                                 TextButton(onClick = { if (n.archived) store.unarchive(n.id) else store.archive(n.id); save() }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)) { Text(if (n.archived) "Unarchive" else "Archive") }
                                 }
