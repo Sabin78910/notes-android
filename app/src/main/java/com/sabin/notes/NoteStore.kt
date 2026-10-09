@@ -7,8 +7,17 @@ data class Note(val id: Long, val text: String, val pinned: Boolean = false, val
     val color: NoteColor? = null,
     val archived: Boolean = false,
     /** Epoch millis when moved to Trash; null if not trashed. */
-    val trashedAt: Long? = null
+    val trashedAt: Long? = null,
+    /** Lowercase labels, see [Tags]. */
+    val tags: Set<String> = emptySet()
 )
+
+object Tags {
+    /** Splits on whitespace/commas, strips '#', lowercases and drops characters outside [a-z0-9_-]. */
+    fun parse(input: String): Set<String> =
+        input.split(Regex("[\\s,]+")).map { t -> t.lowercase().filter { it in 'a'..'z' || it in '0'..'9' || it == '_' || it == '-' } }
+            .filter { it.isNotEmpty() }.toSortedSet()
+}
 
 /** Checklist helpers: each non-blank line of a checklist note is one item. */
 object Checklist {
@@ -55,6 +64,19 @@ class NoteStore(initial: List<Note> = emptyList()) {
         val i = notes.indexOfFirst { it.id == id }
         if (i >= 0) notes[i] = notes[i].copy(color = color)
     }
+
+    fun addTags(id: Long, raw: String) {
+        val i = notes.indexOfFirst { it.id == id }
+        if (i >= 0) notes[i] = notes[i].copy(tags = notes[i].tags + Tags.parse(raw))
+    }
+
+    fun removeTag(id: Long, tag: String) {
+        val i = notes.indexOfFirst { it.id == id }
+        if (i >= 0) notes[i] = notes[i].copy(tags = notes[i].tags - tag)
+    }
+
+    /** Sorted distinct tags across notes that are not in Trash. */
+    fun allTags(): List<String> = notes.filter { it.trashedAt == null }.flatMap { it.tags }.distinct().sorted()
 
     fun toggleItem(id: Long, index: Int) {
         val i = notes.indexOfFirst { it.id == id }
@@ -107,15 +129,15 @@ class NoteStore(initial: List<Note> = emptyList()) {
     }
 
     /** Pinned first, then newest (or oldest) first; filtered by case-insensitive query. */
-    fun visible(query: String = "", newestFirst: Boolean = true, color: NoteColor? = null): List<Note> =
-        notes.filter { !it.archived && it.trashedAt == null && it.text.contains(query.trim(), ignoreCase = true) && (color == null || it.color == color) }
+    fun visible(query: String = "", newestFirst: Boolean = true, color: NoteColor? = null, tag: String? = null): List<Note> =
+        notes.filter { !it.archived && it.trashedAt == null && it.text.contains(query.trim(), ignoreCase = true) && (color == null || it.color == color) && (tag == null || tag in it.tags) }
             .sortedWith(
                 compareByDescending<Note> { it.pinned }
                     .let { if (newestFirst) it.thenByDescending { n -> n.id } else it.thenBy { n -> n.id } }
             )
 
     fun serialize(): String = notes.joinToString("\n") {
-        "${it.id}\t${it.pinned}:${it.createdAt}:${it.checklist}:${it.checked.sorted().joinToString(",")}:${it.color?.name.orEmpty()}:${it.archived}:${it.trashedAt ?: ""}\t${it.text.replace("\\", "\\\\").replace("\n", "\\n")}"
+        "${it.id}\t${it.pinned}:${it.createdAt}:${it.checklist}:${it.checked.sorted().joinToString(",")}:${it.color?.name.orEmpty()}:${it.archived}:${it.trashedAt ?: ""}:${it.tags.joinToString(",")}\t${it.text.replace("\\", "\\\\").replace("\n", "\\n")}"
     }
 
     companion object {
@@ -127,7 +149,7 @@ class NoteStore(initial: List<Note> = emptyList()) {
                 if (parts.size < 3) return@mapNotNull null
                 val text = parts[2].replace(Regex("\\\\(.)")) { if (it.groupValues[1] == "n") "\n" else it.groupValues[1] }
                 // Old data has just "pinned"; new data has "pinned:createdAt" (0 = unknown).
-                val meta = parts[1].split(":", limit = 7)
+                val meta = parts[1].split(":", limit = 8)
                 Note(
                     parts[0].toLongOrNull() ?: return@mapNotNull null,
                     text,
@@ -137,7 +159,8 @@ class NoteStore(initial: List<Note> = emptyList()) {
                     meta.getOrNull(3).orEmpty().split(",").mapNotNull { it.toIntOrNull() }.toSet(),
                     NoteColor.fromName(meta.getOrNull(4)),
                     meta.getOrNull(5).toBoolean(),
-                    meta.getOrNull(6)?.toLongOrNull()
+                    meta.getOrNull(6)?.toLongOrNull(),
+                    Tags.parse(meta.getOrNull(7).orEmpty())
                 )
             }
         )

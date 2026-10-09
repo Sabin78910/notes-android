@@ -56,17 +56,20 @@ fun NotesScreen() {
     var query by remember { mutableStateOf("") }
     var newestFirst by remember { mutableStateOf(true) }
     var colorFilter by remember { mutableStateOf<NoteColor?>(null) }
+    var tagFilter by remember { mutableStateOf<String?>(null) }
+    var tagging by remember { mutableStateOf<Note?>(null) }
+    var tagText by remember { mutableStateOf("") }
     var editing by remember { mutableStateOf<Note?>(null) }
     var editText by remember { mutableStateOf("") }
     val resolver = LocalContext.current.contentResolver
     val animationsEnabled = Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) != 0f
     val snackbarHost = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    val notes = remember(version, query, newestFirst, colorFilter, view) {
+    val notes = remember(version, query, newestFirst, colorFilter, tagFilter, view) {
         when (view) {
             "Archive" -> store.archived()
             "Trash" -> store.trashed()
-            else -> store.visible(query, newestFirst, colorFilter)
+            else -> store.visible(query, newestFirst, colorFilter, tagFilter)
         }
     }
     val dark = isSystemInDarkTheme()
@@ -85,6 +88,21 @@ fun NotesScreen() {
                 ) { Text("Save") }
             },
             dismissButton = { TextButton(onClick = { editing = null }) { Text("Cancel") } }
+        )
+    }
+
+    tagging?.let { n ->
+        AlertDialog(
+            onDismissRequest = { tagging = null },
+            title = { Text("Add tags") },
+            text = { OutlinedTextField(tagText, { tagText = it }, label = { Text("e.g. #work #ideas") }, modifier = Modifier.fillMaxWidth()) },
+            confirmButton = {
+                TextButton(
+                    enabled = Tags.parse(tagText).isNotEmpty(),
+                    onClick = { store.addTags(n.id, tagText); tagging = null; save() }
+                ) { Text("Add") }
+            },
+            dismissButton = { TextButton(onClick = { tagging = null }) { Text("Cancel") } }
         )
     }
 
@@ -123,6 +141,15 @@ fun NotesScreen() {
                         label = { Text(if (colorFilter == c) "✓ ${c.label}" else c.label, color = Color(c.text(dark))) },
                         colors = FilterChipDefaults.filterChipColors(containerColor = Color(c.background(dark)), selectedContainerColor = Color(c.background(dark)))
                     )
+                }
+            }
+            val allTags = remember(version) { store.allTags() }
+            if (tagFilter != null && tagFilter !in allTags) tagFilter = null
+            if (allTags.isNotEmpty()) {
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    allTags.forEach { t ->
+                        FilterChip(tagFilter == t, { tagFilter = if (tagFilter == t) null else t }, label = { Text(if (tagFilter == t) "✓ #$t" else "#$t") })
+                    }
                 }
             }
             OutlinedTextField(draft, { draft = it }, label = { Text("New note") }, modifier = Modifier.fillMaxWidth())
@@ -166,6 +193,17 @@ fun NotesScreen() {
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }
+                            if (n.tags.isNotEmpty()) {
+                                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    n.tags.forEach { t ->
+                                        AssistChip(
+                                            onClick = { store.removeTag(n.id, t); save() },
+                                            label = { Text("#$t ✕") },
+                                            modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "Remove tag $t" }
+                                        )
+                                    }
+                                }
+                            }
                             Row {
                                 if (view == "Trash") {
                                     TextButton(onClick = { store.restoreFromTrash(n.id); save() }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)) { Text("Restore") }
@@ -174,6 +212,7 @@ fun NotesScreen() {
                                 TextButton(onClick = { store.togglePin(n.id); save() }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp).semantics { contentDescription = PinPresentation.pinDescription(n.pinned, n.text) }) { Text(PinPresentation.buttonLabel(n.pinned)) }
                                 TextButton(onClick = { store.setChecklist(n.id, !n.checklist); save() }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)) { Text(if (n.checklist) "Plain note" else "Checklist") }
                                 TextButton(onClick = { store.setColor(n.id, NoteColor.entries.let { e -> if (n.color == null) e.first() else e.getOrNull(n.color.ordinal + 1) }); save() }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)) { Text(n.color?.let { "Colour: ${it.label}" } ?: "Colour") }
+                                TextButton(onClick = { tagText = ""; tagging = n }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)) { Text("Tag") }
                                 TextButton(onClick = { deleteWithUndo(n) }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp).semantics { contentDescription = PinPresentation.deleteDescription(n.text) }) { Text("Delete") }
                                 TextButton(onClick = { if (n.archived) store.unarchive(n.id) else store.archive(n.id); save() }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)) { Text(if (n.archived) "Unarchive" else "Archive") }
                                 }
