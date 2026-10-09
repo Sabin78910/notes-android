@@ -16,10 +16,11 @@ jobs:
   play:
     runs-on: ubuntu-latest
     env:
-      HAS_SECRETS: ${{ secrets.KEYSTORE_BASE64 != '' && secrets.PLAY_SERVICE_ACCOUNT_JSON != '' }}
+      HAS_SECRETS: ${{ secrets.KEYSTORE_BASE64 != '' }}
+      HAS_PLAY: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON != '' }}
     steps:
       - if: env.HAS_SECRETS != 'true'
-        run: echo "::notice::Play secrets not configured yet — skipping upload."
+        run: echo "::notice::Signing key not configured yet — run devops-hq/agent/create-upload-key.sh"
       - if: env.HAS_SECRETS == 'true'
         uses: actions/checkout@v4
       - if: env.HAS_SECRETS == 'true'
@@ -40,6 +41,14 @@ jobs:
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/upload.jks"
           KEYSTORE_FILE="$RUNNER_TEMP/upload.jks" ./gradlew bundleRelease --no-daemon
       - if: env.HAS_SECRETS == 'true'
+        name: Keep signed AAB (for the first manual upload in Play Console)
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-aab
+          path: app/build/outputs/bundle/release/app-release.aab
+      - if: env.HAS_SECRETS == 'true' && env.HAS_PLAY != 'true'
+        run: echo "::notice::Signed AAB built. Upload it manually the first time; add PLAY_SERVICE_ACCOUNT_JSON to automate later uploads."
+      - if: env.HAS_SECRETS == 'true' && env.HAS_PLAY == 'true'
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
