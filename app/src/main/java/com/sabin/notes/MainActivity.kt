@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -33,6 +34,8 @@ fun NotesScreen() {
     var query by remember { mutableStateOf("") }
     var editing by remember { mutableStateOf<Note?>(null) }
     var editText by remember { mutableStateOf("") }
+    val snackbarHost = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     val notes = remember(version, query) { store.visible(query) }
 
     fun save() { prefs.edit().putString(KEY, store.serialize()).apply(); version++ }
@@ -52,7 +55,19 @@ fun NotesScreen() {
         )
     }
 
-    Scaffold(topBar = { TopAppBar(title = { Text("Notes") }) }) { padding ->
+    fun deleteWithUndo(n: Note) {
+        store.delete(n.id); save()
+        scope.launch {
+            snackbarHost.currentSnackbarData?.dismiss()
+            val result = snackbarHost.showSnackbar("Note deleted", actionLabel = "Undo", duration = SnackbarDuration.Long)
+            if (result == SnackbarResult.ActionPerformed) { store.restore(n); save() }
+        }
+    }
+
+    Scaffold(
+        topBar = { TopAppBar(title = { Text("Notes") }) },
+        snackbarHost = { SnackbarHost(snackbarHost) }
+    ) { padding ->
         Column(Modifier.padding(padding).padding(16.dp)) {
             OutlinedTextField(query, { query = it }, label = { Text("Search") }, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(8.dp))
@@ -69,7 +84,7 @@ fun NotesScreen() {
                             Row {
                                 TextButton(onClick = { editText = n.text; editing = n }) { Text("Edit") }
                                 TextButton(onClick = { store.togglePin(n.id); save() }) { Text(if (n.pinned) "Unpin" else "Pin") }
-                                TextButton(onClick = { store.delete(n.id); save() }) { Text("Delete") }
+                                TextButton(onClick = { deleteWithUndo(n) }) { Text("Delete") }
                             }
                         }
                     }
