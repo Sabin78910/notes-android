@@ -1,0 +1,16 @@
+Notes is a fast, no-fuss notepad that keeps your thoughts on your phone.
+
+FEATURES
+• Write and edit notes instantly
+• Pin important notes to the top
+• Search all notes as you type
+• Sort newest or oldest first
+• See when each note was created
+• Undo an accidental delete
+
+PRIVATE BY DESIGN
+• Works fully offline: no internet permission
+• No account, no ads, no tracking
+• Notes stay only on your phone
+
+Privacy policy: https://sabin78910.github.io/privacy-policy/#notes
