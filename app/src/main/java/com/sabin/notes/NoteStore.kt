@@ -31,10 +31,13 @@ class NoteStore(initial: List<Note> = emptyList()) {
         if (i >= 0) notes[i] = notes[i].copy(pinned = !notes[i].pinned)
     }
 
-    /** Pinned first, newest first; filtered by case-insensitive query. */
-    fun visible(query: String = ""): List<Note> =
+    /** Pinned first, then newest (or oldest) first; filtered by case-insensitive query. */
+    fun visible(query: String = "", newestFirst: Boolean = true): List<Note> =
         notes.filter { it.text.contains(query.trim(), ignoreCase = true) }
-            .sortedWith(compareByDescending<Note> { it.pinned }.thenByDescending { it.id })
+            .sortedWith(
+                compareByDescending<Note> { it.pinned }
+                    .let { if (newestFirst) it.thenByDescending { n -> n.id } else it.thenBy { n -> n.id } }
+            )
 
     fun serialize(): String = notes.joinToString("\n") {
         "${it.id}\t${it.pinned}:${it.createdAt}\t${it.text.replace("\\", "\\\\").replace("\n", "\\n")}"
