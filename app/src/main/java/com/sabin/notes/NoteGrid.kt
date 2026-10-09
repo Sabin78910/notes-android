@@ -38,4 +38,25 @@ object EmptyState {
         filtered -> "No matching notes"
         else -> "No notes yet — tap New note to add one"
     }
+
+    fun helper(view: String, filtered: Boolean): String = when {
+        view == "Archive" -> "Archived notes show up here."
+        view == "Trash" -> "Deleted notes stay here for 30 days."
+        filtered -> "Try a different search or clear the filters."
+        else -> "Capture ideas, lists and reminders."
+    }
+
+    fun icon(view: String, filtered: Boolean): String = when {
+        view == "Trash" -> "🗑️"
+        view == "Archive" -> "📦"
+        filtered -> "🔍"
+        else -> "📝"
+    }
+
+    fun showNewNoteAction(view: String, filtered: Boolean): Boolean = view == "Notes" && !filtered
+}
+
+object SortOrder {
+    fun description(newestFirst: Boolean): String = if (newestFirst) "Sort: oldest first" else "Sort: newest first"
+    fun glyph(newestFirst: Boolean): String = if (newestFirst) "↓" else "↑"
 }

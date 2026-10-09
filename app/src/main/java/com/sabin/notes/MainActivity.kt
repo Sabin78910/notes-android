@@ -25,6 +25,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -269,7 +278,32 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = { LargeTopAppBar(title = { Text("Notes") }, scrollBehavior = scrollBehavior) },
+        topBar = {
+            LargeTopAppBar(
+                title = { Text("Notes") },
+                actions = {
+                    IconButton(onClick = { newestFirst = !newestFirst }, modifier = Modifier.semantics { contentDescription = SortOrder.description(newestFirst) }) {
+                        Text(SortOrder.glyph(newestFirst), style = MaterialTheme.typography.titleLarge)
+                    }
+                    IconButton(
+                        onClick = { layout = layout.toggled(); prefs.edit().putString(KEY_LAYOUT, layout.name).apply() },
+                        modifier = Modifier.semantics { contentDescription = layout.toggleDescription() }
+                    ) {
+                        if (layout == LayoutMode.GRID) Icon(Icons.Filled.Menu, contentDescription = null)
+                        else Text("▦", style = MaterialTheme.typography.titleLarge)
+                    }
+                    var menuOpen by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(onClick = { menuOpen = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "More options") }
+                        DropdownMenu(menuOpen, { menuOpen = false }) {
+                            DropdownMenuItem(text = { Text("Back up") }, onClick = { menuOpen = false; exportLauncher.launch("notes-backup.json") })
+                            DropdownMenuItem(text = { Text("Restore") }, onClick = { menuOpen = false; importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) })
+                        }
+                    }
+                },
+                scrollBehavior = scrollBehavior
+            )
+        },
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = { addAsChecklist = false; adding = true },
@@ -287,9 +321,14 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
             contentPadding = PaddingValues(bottom = 88.dp)
         ) {
           item(span = StaggeredGridItemSpan.FullLine) { Column {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("Notes", "Archive", "Trash").forEach { v ->
-                    FilterChip(view == v, { view = v }, label = { Text(v) })
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                val views = listOf("Notes", "Archive", "Trash")
+                views.forEachIndexed { i, v ->
+                    SegmentedButton(
+                        selected = view == v, onClick = { view = v },
+                        shape = SegmentedButtonDefaults.itemShape(i, views.size),
+                        label = { Text(v) }
+                    )
                 }
             }
             if (view == "Trash") {
@@ -300,21 +339,16 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
                 Text("Reminders")
                 Switch(remindersOn, { on -> if (on) explainReminders = true else setRemindersEnabled(false) })
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = { exportLauncher.launch("notes-backup.json") }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Back up") }
-                TextButton(onClick = { importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Restore") }
-            }
-            OutlinedTextField(query, { query = it }, label = { Text("Search") }, modifier = Modifier.fillMaxWidth())
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = { newestFirst = !newestFirst }, modifier = Modifier.heightIn(min = 48.dp)) {
-                    Text(if (newestFirst) "Sort: Newest first" else "Sort: Oldest first")
-                }
-                TextButton(
-                    onClick = { layout = layout.toggled(); prefs.edit().putString(KEY_LAYOUT, layout.name).apply() },
-                    modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = layout.toggleDescription() }
-                ) { Text(if (layout == LayoutMode.GRID) "Grid view" else "List view") }
-            }
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextField(
+                query, { query = it },
+                placeholder = { Text("Search notes") },
+                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                singleLine = true,
+                shape = RoundedCornerShape(28.dp),
+                colors = TextFieldDefaults.colors(focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent, disabledIndicatorColor = Color.Transparent),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+            )
+            Row(Modifier.edgeFade().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 FilterChip(colorFilter == null, { colorFilter = null }, label = { Text("All") })
                 NoteColor.entries.forEach { c ->
                     FilterChip(
@@ -323,14 +357,16 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
                         colors = FilterChipDefaults.filterChipColors(containerColor = Color(c.background(dark)), selectedContainerColor = Color(c.background(dark)))
                     )
                 }
+                Spacer(Modifier.width(24.dp))
             }
             val allTags = remember(version) { store.allTags() }
             if (tagFilter != null && tagFilter !in allTags) tagFilter = null
             if (allTags.isNotEmpty()) {
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.edgeFade().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     allTags.forEach { t ->
                         FilterChip(tagFilter == t, { tagFilter = if (tagFilter == t) null else t }, label = { Text(if (tagFilter == t) "✓ #$t" else "#$t") })
                     }
+                    Spacer(Modifier.width(24.dp))
                 }
             }
           } }
@@ -338,9 +374,18 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
                     item(span = StaggeredGridItemSpan.FullLine) {
                         val filtered = query.isNotBlank() || colorFilter != null || tagFilter != null
                         Column(Modifier.fillMaxWidth().padding(vertical = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(if (view == "Trash") "🗑️" else if (view == "Archive") "📦" else if (filtered) "🔍" else "📝", style = MaterialTheme.typography.displayLarge)
-                            Spacer(Modifier.height(12.dp))
+                            Surface(shape = RoundedCornerShape(40.dp), color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.size(144.dp)) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(EmptyState.icon(view, filtered), style = MaterialTheme.typography.displayLarge.copy(fontSize = MaterialTheme.typography.displayLarge.fontSize * 1.5f))
+                                }
+                            }
+                            Spacer(Modifier.height(16.dp))
                             Text(EmptyState.message(view, filtered), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+                            Text(EmptyState.helper(view, filtered), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+                            if (EmptyState.showNewNoteAction(view, filtered)) {
+                                Spacer(Modifier.height(16.dp))
+                                FilledTonalButton(onClick = { addAsChecklist = false; adding = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text("New note") }
+                            }
                         }
                     }
                 }
@@ -421,3 +466,17 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
             }
     }
 }
+
+/** Fades the trailing edge of a horizontally scrolling row so clipped chips read as scrollable. */
+private fun Modifier.edgeFade(width: Float = 32f): Modifier = this
+    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        val w = width.dp.toPx().coerceAtMost(size.width)
+        drawRect(
+            Brush.horizontalGradient(listOf(Color.Black, Color.Transparent), startX = size.width - w, endX = size.width),
+            topLeft = androidx.compose.ui.geometry.Offset(size.width - w, 0f),
+            size = androidx.compose.ui.geometry.Size(w, size.height),
+            blendMode = BlendMode.DstIn
+        )
+    }
