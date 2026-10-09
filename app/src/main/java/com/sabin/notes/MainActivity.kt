@@ -6,16 +6,20 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import android.provider.Settings
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import java.text.DateFormat
@@ -49,6 +53,8 @@ fun NotesScreen() {
     var newestFirst by remember { mutableStateOf(true) }
     var editing by remember { mutableStateOf<Note?>(null) }
     var editText by remember { mutableStateOf("") }
+    val resolver = LocalContext.current.contentResolver
+    val animationsEnabled = Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) != 0f
     val snackbarHost = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val notes = remember(version, query, newestFirst) { store.visible(query, newestFirst) }
@@ -100,7 +106,25 @@ fun NotesScreen() {
                             PinPresentation.badge(n.pinned)?.let {
                                 Text("📌 $it", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                             }
-                            Text(n.text)
+                            if (n.checklist) {
+                                val p = Checklist.progress(n)
+                                Text(p.label, style = MaterialTheme.typography.labelMedium)
+                                Checklist.items(n.text).forEachIndexed { idx, item ->
+                                    val ticked = idx in n.checked
+                                    Row(
+                                        Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                                            .clickable { store.toggleItem(n.id, idx); save() },
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Checkbox(ticked, onCheckedChange = null)
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(item, textDecoration = if (ticked) TextDecoration.LineThrough else null)
+                                    }
+                                }
+                                if (Checklist.shouldCelebrate(p, animationsEnabled)) {
+                                    Text("🎉 All done!", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                                }
+                            } else Text(n.text)
                             if (n.createdAt > 0) {
                                 Text(
                                     "Created " + DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(n.createdAt)),
@@ -110,6 +134,7 @@ fun NotesScreen() {
                             Row {
                                 TextButton(onClick = { editText = n.text; editing = n }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp).semantics { contentDescription = PinPresentation.editDescription(n.text) }) { Text("Edit") }
                                 TextButton(onClick = { store.togglePin(n.id); save() }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp).semantics { contentDescription = PinPresentation.pinDescription(n.pinned, n.text) }) { Text(PinPresentation.buttonLabel(n.pinned)) }
+                                TextButton(onClick = { store.setChecklist(n.id, !n.checklist); save() }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)) { Text(if (n.checklist) "Plain note" else "Checklist") }
                                 TextButton(onClick = { deleteWithUndo(n) }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp).semantics { contentDescription = PinPresentation.deleteDescription(n.text) }) { Text("Delete") }
                             }
                         }
