@@ -184,6 +184,16 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
             scope.launch { snackbarHost.showSnackbar(appContext.getString(if (ok) R.string.msg_backup_saved else R.string.msg_backup_failed)) }
         }
     }
+    var exportingNote by remember { mutableStateOf<Note?>(null) }
+    val noteExportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/markdown")) { uri ->
+        val n = exportingNote
+        exportingNote = null
+        if (uri != null && n != null) {
+            val ok = runCatching { resolver.openOutputStream(uri, "wt")!!.use { it.write(NoteExport.toMarkdown(n).toByteArray()) } }.isSuccess
+            if (!ok) reviewPrompt?.onError()
+            scope.launch { snackbarHost.showSnackbar(appContext.getString(if (ok) R.string.msg_note_exported else R.string.msg_note_export_failed)) }
+        }
+    }
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             val text = runCatching { resolver.openInputStream(uri)!!.use { String(it.readBytes()) } }.getOrNull()
@@ -239,6 +249,11 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
                         },
                         modifier = Modifier.semantics { contentDescription = appContext.getString(R.string.share_note_description) }
                     ) { Text(stringResource(R.string.share)) }
+                    TextButton(onClick = {
+                        val current = n.copy(text = editText)
+                        exportingNote = current
+                        noteExportLauncher.launch(NoteExport.fileName(current.text))
+                    }) { Text(stringResource(R.string.export_note)) }
                     TextButton(onClick = { editing = null }) { Text(stringResource(R.string.cancel)) }
                 }
             }

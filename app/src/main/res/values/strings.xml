@@ -66,4 +66,7 @@
     <string name="shortcut_new_note_long">Create a new note</string>
     <string name="shortcut_new_checklist_short">New checklist</string>
     <string name="shortcut_new_checklist_long">Create a new checklist</string>
+    <string name="export_note">Export as text file</string>
+    <string name="msg_note_exported">Note exported</string>
+    <string name="msg_note_export_failed">Could not export note</string>
 </resources>
