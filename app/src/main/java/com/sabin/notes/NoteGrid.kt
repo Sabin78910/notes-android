@@ -60,3 +60,20 @@ object SortOrder {
     fun description(newestFirst: Boolean): String = if (newestFirst) "Sort: oldest first" else "Sort: newest first"
     fun glyph(newestFirst: Boolean): String = if (newestFirst) "↓" else "↑"
 }
+
+/** Splits the wall into a pinned section and the rest, Keep-style. */
+object NoteSections {
+    class Result(val pinned: List<Note>, val others: List<Note>) {
+        val othersNonEmpty: Boolean get() = others.isNotEmpty()
+        /** Headers only help when there is a pinned section to distinguish from. */
+        val showHeaders: Boolean get() = pinned.isNotEmpty()
+    }
+
+    fun split(notes: List<Note>): Result {
+        val (pinned, others) = notes.partition { it.pinned }
+        return Result(pinned, others)
+    }
+
+    /** Spring placement is skipped when the system animator scale is 0 (reduced motion). */
+    fun useSpringMotion(animationScale: Float): Boolean = animationScale != 0f
+}

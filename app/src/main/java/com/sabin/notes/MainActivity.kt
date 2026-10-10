@@ -17,6 +17,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridItemScope
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
@@ -48,6 +49,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
@@ -498,7 +500,7 @@ fun NotesScreen(appLockAvailable: Boolean = false, appLockEnabled: Boolean = fal
                         }
                     }
                 }
-                items(notes, key = { it.id }) { n ->
+                val noteCard: @Composable LazyStaggeredGridItemScope.(Note) -> Unit = { n ->
                     val fg = n.color?.let { Color(it.text(dark)) } ?: Color.Unspecified
                     val colourFmt = stringResource(R.string.a11y_colour, "%1\$s")
                     val tagsFmt = stringResource(R.string.a11y_tags, "%1\$s")
@@ -509,10 +511,12 @@ fun NotesScreen(appLockAvailable: Boolean = false, appLockEnabled: Boolean = fal
                     )
                     val cardDesc = NoteAccessibility.describe(n.text, n.pinned, n.color?.label, n.tags, cardLabels)
                     Card(
-                        Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = cardDesc }.animateItem(
-                            fadeInSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                            placementSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow),
-                            fadeOutSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                        Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = cardDesc }.then(
+                            if (NoteSections.useSpringMotion(if (animationsEnabled) 1f else 0f)) Modifier.animateItem(
+                                fadeInSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                                placementSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow),
+                                fadeOutSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                            ) else Modifier
                         ),
                         colors = n.color?.let { CardDefaults.cardColors(containerColor = Color(it.background(dark)), contentColor = fg) } ?: CardDefaults.cardColors()
                     ) {
@@ -584,6 +588,18 @@ fun NotesScreen(appLockAvailable: Boolean = false, appLockEnabled: Boolean = fal
                         }
                     }
                 }
+                val sections = NoteSections.split(notes)
+                val sectionTitle: @Composable (Int) -> Unit = { res ->
+                    Text(
+                        stringResource(res), style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = 8.dp).semantics { heading() }
+                    )
+                }
+                if (sections.showHeaders) item(span = StaggeredGridItemSpan.FullLine, key = "header-pinned") { sectionTitle(R.string.section_pinned) }
+                items(sections.pinned, key = { it.id }, itemContent = noteCard)
+                if (sections.showHeaders && sections.othersNonEmpty) item(span = StaggeredGridItemSpan.FullLine, key = "header-others") { sectionTitle(R.string.section_others) }
+                items(sections.others, key = { it.id }, itemContent = noteCard)
             }
     }
 }

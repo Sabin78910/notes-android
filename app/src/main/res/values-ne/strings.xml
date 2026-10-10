@@ -16,6 +16,8 @@
     <string name="continue_label">जारी राख्नुहोस्</string>
     <string name="not_now">अहिले होइन</string>
     <string name="title_notes">नोट्स</string>
+    <string name="section_pinned">पिन गरिएको</string>
+    <string name="section_others">अन्य</string>
     <string name="more_options">थप विकल्पहरू</string>
     <string name="back_up">ब्याकअप</string>
     <string name="restore">पुनर्स्थापना</string>
