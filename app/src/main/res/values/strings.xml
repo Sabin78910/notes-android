@@ -87,4 +87,7 @@
     <string name="app_lock_unlock">Unlock</string>
     <string name="app_lock_prompt_title">Unlock Notes</string>
     <string name="app_lock_prompt_body">Confirm your screen lock to open your notes.</string>
+    <string name="a11y_pinned">Pinned</string>
+    <string name="a11y_colour">Colour: %1$s</string>
+    <string name="a11y_tags">Tags: %1$s</string>
 </resources>

@@ -12,7 +12,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import android.provider.Settings
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -49,6 +49,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
@@ -121,7 +122,7 @@ internal const val KEY = "data"
 private const val KEY_LAYOUT = "layout"
 private const val KEY_ONBOARDED = "onboarded"
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun NotesScreen(appLockAvailable: Boolean = false, appLockEnabled: Boolean = false, onAppLockChange: (Boolean) -> Unit = {}, launchAction: LaunchAction? = null, onLaunchActionHandled: () -> Unit = {}, openNoteId: Long? = null, onNoteOpened: () -> Unit = {}, sharedText: String? = null, onSharedHandled: () -> Unit = {}) {
     val prefs = LocalContext.current.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -499,8 +500,16 @@ fun NotesScreen(appLockAvailable: Boolean = false, appLockEnabled: Boolean = fal
                 }
                 items(notes, key = { it.id }) { n ->
                     val fg = n.color?.let { Color(it.text(dark)) } ?: Color.Unspecified
+                    val colourFmt = stringResource(R.string.a11y_colour, "%1\$s")
+                    val tagsFmt = stringResource(R.string.a11y_tags, "%1\$s")
+                    val cardLabels = NoteAccessibility.Labels(
+                        pinned = stringResource(R.string.a11y_pinned),
+                        colour = { colourFmt.replace("%1\$s", it) },
+                        tags = { tagsFmt.replace("%1\$s", it) }
+                    )
+                    val cardDesc = NoteAccessibility.describe(n.text, n.pinned, n.color?.label, n.tags, cardLabels)
                     Card(
-                        Modifier.fillMaxWidth().animateItem(
+                        Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = cardDesc }.animateItem(
                             fadeInSpec = spring(stiffness = Spring.StiffnessMediumLow),
                             placementSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow),
                             fadeOutSpec = spring(stiffness = Spring.StiffnessMediumLow)
@@ -518,10 +527,10 @@ fun NotesScreen(appLockAvailable: Boolean = false, appLockEnabled: Boolean = fal
                                     val ticked = idx in n.checked
                                     Row(
                                         Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                                            .clickable {
+                                            .toggleable(value = ticked, role = Role.Checkbox, onValueChange = {
                                                 store.toggleItem(n.id, idx); save()
                                                 store.all().firstOrNull { it.id == n.id }?.let { if (Checklist.progress(it).complete) reviewPrompt?.onChecklistCompleted(System.currentTimeMillis()) }
-                                            },
+                                            }),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Checkbox(ticked, onCheckedChange = null)
@@ -555,7 +564,7 @@ fun NotesScreen(appLockAvailable: Boolean = false, appLockEnabled: Boolean = fal
                                     }
                                 }
                             }
-                            Row {
+                            FlowRow {
                                 if (view == "Trash") {
                                     TextButton(onClick = { store.restoreFromTrash(n.id); save() }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)) { Text(stringResource(R.string.restore)) }
                                 } else {
