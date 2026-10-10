@@ -66,4 +66,7 @@
     <string name="shortcut_new_note_long">नयाँ नोट बनाउनुहोस्</string>
     <string name="shortcut_new_checklist_short">नयाँ चेकलिस्ट</string>
     <string name="shortcut_new_checklist_long">नयाँ चेकलिस्ट बनाउनुहोस्</string>
+    <string name="export_note">पाठ फाइलको रूपमा निर्यात गर्नुहोस्</string>
+    <string name="msg_note_exported">नोट निर्यात गरियो</string>
+    <string name="msg_note_export_failed">नोट निर्यात गर्न सकिएन</string>
 </resources>
