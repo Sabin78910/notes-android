@@ -460,7 +460,7 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
                                 if (Checklist.shouldCelebrate(p, animationsEnabled)) {
                                     Text(stringResource(R.string.all_done), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
                                 }
-                            } else Text(NotePreview.text(n), maxLines = NotePreview.MAX_LINES, overflow = TextOverflow.Ellipsis)
+                            } else Text(linkified(NotePreview.text(n), MaterialTheme.colorScheme.primary), maxLines = NotePreview.MAX_LINES, overflow = TextOverflow.Ellipsis)
                             if (n.createdAt > 0) {
                                 Text(
                                     stringResource(R.string.created_at, DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(n.createdAt))),
