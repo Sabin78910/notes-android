@@ -62,4 +62,8 @@
     <string name="created_at">Created %1$s</string>
     <string name="share">Share</string>
     <string name="share_note_description">Share note as text</string>
+    <string name="shortcut_new_note_short">New note</string>
+    <string name="shortcut_new_note_long">Create a new note</string>
+    <string name="shortcut_new_checklist_short">New checklist</string>
+    <string name="shortcut_new_checklist_long">Create a new checklist</string>
 </resources>
