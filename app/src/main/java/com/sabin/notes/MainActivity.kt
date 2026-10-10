@@ -85,6 +85,10 @@ private const val KEY_ONBOARDED = "onboarded"
 fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () -> Unit = {}, openNoteId: Long? = null, onNoteOpened: () -> Unit = {}) {
     val prefs = LocalContext.current.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     val store = remember { NoteStore.deserialize(prefs.getString(KEY, "") ?: "") .also { it.purgeExpired() } }
+    val activity = androidx.activity.compose.LocalActivity.current
+    val reviewPrompt = remember {
+        activity?.let { ReviewPrompt(PrefsReviewState(prefs), PlayReviewGateway(it)).also { r -> r.onAppLaunch(System.currentTimeMillis()) } }
+    }
     var view by remember { mutableStateOf("Notes") }
     var version by remember { mutableIntStateOf(0) }
     var draft by remember { mutableStateOf("") }
@@ -158,6 +162,7 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) {
             val ok = runCatching { resolver.openOutputStream(uri, "wt")!!.use { it.write(Backup.export(store.all()).toByteArray()) } }.isSuccess
+            if (!ok) reviewPrompt?.onError()
             scope.launch { snackbarHost.showSnackbar(if (ok) "Backup saved" else "Could not save backup") }
         }
     }
@@ -166,8 +171,8 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
             val text = runCatching { resolver.openInputStream(uri)!!.use { String(it.readBytes()) } }.getOrNull()
             val msg = when (val r = text?.let { Backup.import(store, it) }) {
                 is Backup.Result.Imported -> { save(); "Restored ${r.added} new notes" }
-                is Backup.Result.Error -> r.message
-                null -> "Could not read file"
+                is Backup.Result.Error -> { reviewPrompt?.onError(); r.message }
+                null -> { reviewPrompt?.onError(); "Could not read file" }
             }
             scope.launch { snackbarHost.showSnackbar(msg) }
         }
@@ -189,7 +194,7 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
             confirmButton = {
                 TextButton(
                     enabled = draft.isNotBlank(),
-                    onClick = { val n = store.add(draft); if (addAsChecklist) store.setChecklist(n.id, true); draft = ""; adding = false; addAsChecklist = false; save() }
+                    onClick = { val n = store.add(draft); if (addAsChecklist) store.setChecklist(n.id, true); draft = ""; adding = false; addAsChecklist = false; save(); reviewPrompt?.onNoteAdded(store.all().count { it.trashedAt == null }, System.currentTimeMillis()) }
                 ) { Text("Add note") }
             },
             dismissButton = { TextButton(onClick = { adding = false; addAsChecklist = false }) { Text("Cancel") } }
@@ -410,7 +415,10 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
                                     val ticked = idx in n.checked
                                     Row(
                                         Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                                            .clickable { store.toggleItem(n.id, idx); save() },
+                                            .clickable {
+                                                store.toggleItem(n.id, idx); save()
+                                                store.all().firstOrNull { it.id == n.id }?.let { if (Checklist.progress(it).complete) reviewPrompt?.onChecklistCompleted(System.currentTimeMillis()) }
+                                            },
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Checkbox(ticked, onCheckedChange = null)
