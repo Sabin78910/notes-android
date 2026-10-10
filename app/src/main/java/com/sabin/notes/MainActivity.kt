@@ -3,6 +3,8 @@ package com.sabin.notes
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.os.SystemClock
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -64,6 +66,28 @@ class MainActivity : ComponentActivity() {
         sharedText = ShareText.incoming(intent.getStringExtra(Intent.EXTRA_SUBJECT), intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString())
     }
 
+    private var lockEnabled by mutableStateOf(false)
+    private var unlocked by mutableStateOf(unlockedInProcess)
+    private var backgroundedAt: Long? = null
+
+    private fun applyLock(enabled: Boolean) {
+        lockEnabled = enabled
+        if (enabled) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE) else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+    }
+
+    private fun markUnlocked(value: Boolean) { unlocked = value; unlockedInProcess = value }
+
+    override fun onStart() {
+        super.onStart()
+        if (AppLockPolicy.shouldLock(lockEnabled, unlocked, backgroundedAt, SystemClock.elapsedRealtime())) markUnlocked(false)
+        backgroundedAt = null
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (unlocked) backgroundedAt = SystemClock.elapsedRealtime()
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         launchAction = LaunchAction.fromName(intent.getStringExtra(LaunchAction.EXTRA))
@@ -80,12 +104,18 @@ class MainActivity : ComponentActivity() {
         launchAction = LaunchAction.fromName(intent?.getStringExtra(LaunchAction.EXTRA))
         openNoteId = intent?.getLongExtra(EXTRA_NOTE_ID, -1L)?.takeIf { it >= 0 }
         if (savedInstanceState == null) readShared(intent)
+        val prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        applyLock(prefs.getBoolean(KEY_APP_LOCK, false) && AppLock.available(this))
         setContent {
-            NotesTheme { NotesScreen(launchAction, onLaunchActionHandled = { launchAction = null }, openNoteId, onNoteOpened = { openNoteId = null }, sharedText, onSharedHandled = { sharedText = null }) }
+            NotesTheme { if (lockEnabled && !unlocked) LockScreen(onUnlocked = { markUnlocked(true) }) else NotesScreen(
+                appLockAvailable = AppLock.available(this), appLockEnabled = lockEnabled,
+                onAppLockChange = { on -> prefs.edit().putBoolean(KEY_APP_LOCK, on).apply(); applyLock(on); markUnlocked(true) },
+                launchAction = launchAction, onLaunchActionHandled = { launchAction = null }, openNoteId, onNoteOpened = { openNoteId = null }, sharedText, onSharedHandled = { sharedText = null }) }
         }
     }
 }
 
+private var unlockedInProcess = false
 internal const val PREFS = "notes"
 internal const val KEY = "data"
 private const val KEY_LAYOUT = "layout"
@@ -93,7 +123,7 @@ private const val KEY_ONBOARDED = "onboarded"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () -> Unit = {}, openNoteId: Long? = null, onNoteOpened: () -> Unit = {}, sharedText: String? = null, onSharedHandled: () -> Unit = {}) {
+fun NotesScreen(appLockAvailable: Boolean = false, appLockEnabled: Boolean = false, onAppLockChange: (Boolean) -> Unit = {}, launchAction: LaunchAction? = null, onLaunchActionHandled: () -> Unit = {}, openNoteId: Long? = null, onNoteOpened: () -> Unit = {}, sharedText: String? = null, onSharedHandled: () -> Unit = {}) {
     val prefs = LocalContext.current.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     val store = remember { NoteStore.deserialize(prefs.getString(KEY, "") ?: "") .also { it.purgeExpired() } }
     val activity = androidx.activity.compose.LocalActivity.current
@@ -412,6 +442,10 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(stringResource(R.string.reminders))
                 Switch(remindersOn, { on -> if (on) explainReminders = true else setRemindersEnabled(false) })
+            }
+            if (appLockAvailable) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(R.string.app_lock_setting), Modifier.weight(1f))
+                Switch(appLockEnabled, onAppLockChange)
             }
             TextField(
                 query, { query = it },

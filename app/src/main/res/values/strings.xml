@@ -82,4 +82,9 @@
         <item quantity="one">%d character</item>
         <item quantity="other">%d characters</item>
     </plurals>
+    <string name="app_lock_setting">Require device lock to open Notes</string>
+    <string name="app_lock_locked">Notes is locked</string>
+    <string name="app_lock_unlock">Unlock</string>
+    <string name="app_lock_prompt_title">Unlock Notes</string>
+    <string name="app_lock_prompt_body">Confirm your screen lock to open your notes.</string>
 </resources>

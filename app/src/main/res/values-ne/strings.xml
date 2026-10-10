@@ -82,4 +82,9 @@
         <item quantity="one">%d अक्षर</item>
         <item quantity="other">%d अक्षर</item>
     </plurals>
+    <string name="app_lock_setting">नोट्स खोल्न डिभाइस लक आवश्यक</string>
+    <string name="app_lock_locked">नोट्स लक गरिएको छ</string>
+    <string name="app_lock_unlock">अनलक गर्नुहोस्</string>
+    <string name="app_lock_prompt_title">नोट्स अनलक गर्नुहोस्</string>
+    <string name="app_lock_prompt_body">आफ्ना नोटहरू खोल्न स्क्रिन लक पुष्टि गर्नुहोस्।</string>
 </resources>
