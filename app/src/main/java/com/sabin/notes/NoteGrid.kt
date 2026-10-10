@@ -31,7 +31,16 @@ object NotePreview {
     fun hiddenItems(note: Note): Int = (Checklist.items(note.text).size - MAX_ITEMS).coerceAtLeast(0)
 }
 
+enum class EmptyIllustration { NOTES, SEARCH, ARCHIVE, TRASH }
+
 object EmptyState {
+    fun illustration(view: String, filtered: Boolean): EmptyIllustration = when {
+        view == "Trash" -> EmptyIllustration.TRASH
+        view == "Archive" -> EmptyIllustration.ARCHIVE
+        filtered -> EmptyIllustration.SEARCH
+        else -> EmptyIllustration.NOTES
+    }
+
     fun message(view: String, filtered: Boolean): String = when {
         view == "Archive" -> "Archive is empty"
         view == "Trash" -> "Trash is empty"
