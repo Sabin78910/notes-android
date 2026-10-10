@@ -24,6 +24,13 @@ import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
 import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material.icons.Icons
@@ -155,6 +162,7 @@ fun NotesScreen(appLockAvailable: Boolean = false, appLockEnabled: Boolean = fal
     var editing by remember { mutableStateOf<Note?>(null) }
     var editText by remember { mutableStateOf("") }
     val resolver = LocalContext.current.contentResolver
+    val haptics = LocalHapticFeedback.current
     val animationsEnabled = Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) != 0f
     val snackbarHost = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -270,7 +278,7 @@ fun NotesScreen(appLockAvailable: Boolean = false, appLockEnabled: Boolean = fal
             title = { Text(stringResource(R.string.edit_note_title)) },
             text = {
                 Column {
-                    OutlinedTextField(editText, { editText = it }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(editText, { editText = it }, textStyle = MaterialTheme.typography.titleLarge, modifier = Modifier.fillMaxWidth())
                     val res = LocalContext.current.resources
                     val summary = if (n.checklist) {
                         val p = WordCount.checklistProgress(editText, n.checked)
@@ -527,19 +535,35 @@ fun NotesScreen(appLockAvailable: Boolean = false, appLockEnabled: Boolean = fal
                             if (n.checklist) {
                                 val p = Checklist.progress(n)
                                 Text(p.label, style = MaterialTheme.typography.labelMedium)
-                                Checklist.items(n.text).take(NotePreview.MAX_ITEMS).forEachIndexed { idx, item ->
-                                    val ticked = idx in n.checked
+                                val progressAnim by animateFloatAsState(p.fraction, if (animationsEnabled) spring(stiffness = Spring.StiffnessMedium) else snap())
+                                LinearProgressIndicator(
+                                    progress = { progressAnim },
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clearAndSetSemantics { contentDescription = p.label }
+                                )
+                                val sec = Checklist.sections(n)
+                                val shown = (sec.open + sec.done).take(NotePreview.MAX_ITEMS)
+                                shown.forEachIndexed { pos, entry ->
+                                    val ticked = entry.index in n.checked
+                                    if (ticked && (pos == 0 || shown[pos - 1].index !in n.checked)) {
+                                        Text(stringResource(R.string.done_section), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 4.dp))
+                                    }
                                     Row(
                                         Modifier.fillMaxWidth().heightIn(min = 48.dp)
                                             .toggleable(value = ticked, role = Role.Checkbox, onValueChange = {
-                                                store.toggleItem(n.id, idx); save()
-                                                store.all().firstOrNull { it.id == n.id }?.let { if (Checklist.progress(it).complete) reviewPrompt?.onChecklistCompleted(System.currentTimeMillis()) }
+                                                haptics.performHapticFeedback(if (it) HapticFeedbackType.Confirm else HapticFeedbackType.ContextClick)
+                                                store.toggleItem(n.id, entry.index); save()
+                                                store.all().firstOrNull { x -> x.id == n.id }?.let { x -> if (Checklist.progress(x).complete) reviewPrompt?.onChecklistCompleted(System.currentTimeMillis()) }
                                             }),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Checkbox(ticked, onCheckedChange = null)
                                         Spacer(Modifier.width(8.dp))
-                                        Text(item, textDecoration = if (ticked) TextDecoration.LineThrough else null)
+                                        val strike by animateFloatAsState(if (ticked) 1f else 0f, if (animationsEnabled) spring() else snap())
+                                        Text(
+                                            entry.text,
+                                            textDecoration = if (ticked) TextDecoration.LineThrough else null,
+                                            modifier = Modifier.alpha(1f - 0.4f * strike)
+                                        )
                                     }
                                 }
                                 if (NotePreview.hiddenItems(n) > 0) Text(stringResource(R.string.more_items, NotePreview.hiddenItems(n)), style = MaterialTheme.typography.labelMedium)

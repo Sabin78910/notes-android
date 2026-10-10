@@ -92,4 +92,5 @@
     <string name="a11y_pinned">पिन गरिएको</string>
     <string name="a11y_colour">रङ: %1$s</string>
     <string name="a11y_tags">ट्यागहरू: %1$s</string>
+    <string name="done_section">सम्पन्न</string>
 </resources>

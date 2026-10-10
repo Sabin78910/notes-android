@@ -26,6 +26,16 @@ object Checklist {
     data class Progress(val done: Int, val total: Int) {
         val label: String get() = "$done/$total done"
         val complete: Boolean get() = total > 0 && done == total
+        val fraction: Float get() = if (total == 0) 0f else done.toFloat() / total
+    }
+
+    data class Entry(val index: Int, val text: String)
+    data class Sections(val open: List<Entry>, val done: List<Entry>)
+
+    /** Splits items into open and Done groups; [Entry.index] is the item's index for [NoteStore.toggleItem]. */
+    fun sections(note: Note): Sections {
+        val (done, open) = items(note.text).mapIndexed { i, t -> Entry(i, t) }.partition { it.index in note.checked }
+        return Sections(open, done)
     }
 
     fun items(text: String): List<String> = text.lines().map { it.trim() }.filter { it.isNotEmpty() }

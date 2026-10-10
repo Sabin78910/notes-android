@@ -92,4 +92,5 @@
     <string name="a11y_pinned">Pinned</string>
     <string name="a11y_colour">Colour: %1$s</string>
     <string name="a11y_tags">Tags: %1$s</string>
+    <string name="done_section">Done</string>
 </resources>
