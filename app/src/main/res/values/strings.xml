@@ -69,4 +69,7 @@
     <string name="export_note">Export as text file</string>
     <string name="msg_note_exported">Note exported</string>
     <string name="msg_note_export_failed">Could not export note</string>
+    <string name="duplicate_note">Duplicate</string>
+    <string name="duplicate_note_description">Duplicate note</string>
+    <string name="msg_note_duplicated">Note duplicated</string>
 </resources>

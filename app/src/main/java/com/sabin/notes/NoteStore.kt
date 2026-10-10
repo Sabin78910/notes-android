@@ -96,6 +96,12 @@ class NoteStore(initial: List<Note> = emptyList()) {
     /** Adds a note from a backup under a fresh id. */
     fun addImported(note: Note) { notes.add(note.copy(id = nextId++)) }
 
+    /** Adds a copy of the note (see [NoteDuplicate]); null if [id] is unknown. */
+    fun duplicate(id: Long, now: Long = System.currentTimeMillis()): Note? {
+        val src = notes.firstOrNull { it.id == id } ?: return null
+        return NoteDuplicate.copyOf(src, nextId++, now).also { notes.add(it) }
+    }
+
     fun toggleItem(id: Long, index: Int) {
         val i = notes.indexOfFirst { it.id == id }
         if (i < 0 || !notes[i].checklist || index !in Checklist.items(notes[i].text).indices) return
