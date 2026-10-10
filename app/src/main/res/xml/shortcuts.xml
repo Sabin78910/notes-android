@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="new_note"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_note"
+        android:shortcutShortLabel="@string/shortcut_new_note_short"
+        android:shortcutLongLabel="@string/shortcut_new_note_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.sabin.notes"
+            android:targetClass="com.sabin.notes.MainActivity">
+            <extra android:name="com.sabin.notes.LAUNCH_ACTION" android:value="new_note" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="new_checklist"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_checklist"
+        android:shortcutShortLabel="@string/shortcut_new_checklist_short"
+        android:shortcutLongLabel="@string/shortcut_new_checklist_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.sabin.notes"
+            android:targetClass="com.sabin.notes.MainActivity">
+            <extra android:name="com.sabin.notes.LAUNCH_ACTION" android:value="new_checklist" />
+        </intent>
+    </shortcut>
+</shortcuts>
