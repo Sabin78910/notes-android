@@ -72,4 +72,14 @@
     <string name="duplicate_note">प्रतिलिपि</string>
     <string name="duplicate_note_description">नोटको प्रतिलिपि बनाउनुहोस्</string>
     <string name="msg_note_duplicated">नोटको प्रतिलिपि बनाइयो</string>
+    <string name="count_summary">%1$s · %2$s</string>
+    <string name="checklist_done_count">%2$d मध्ये %1$d सकियो</string>
+    <plurals name="word_count">
+        <item quantity="one">%d शब्द</item>
+        <item quantity="other">%d शब्द</item>
+    </plurals>
+    <plurals name="character_count">
+        <item quantity="one">%d अक्षर</item>
+        <item quantity="other">%d अक्षर</item>
+    </plurals>
 </resources>
