@@ -254,6 +254,15 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
                         exportingNote = current
                         noteExportLauncher.launch(NoteExport.fileName(current.text))
                     }) { Text(stringResource(R.string.export_note)) }
+                    TextButton(
+                        onClick = {
+                            store.duplicate(n.id)
+                            editing = null
+                            save()
+                            scope.launch { snackbarHost.showSnackbar(appContext.getString(R.string.msg_note_duplicated)) }
+                        },
+                        modifier = Modifier.semantics { contentDescription = appContext.getString(R.string.duplicate_note_description) }
+                    ) { Text(stringResource(R.string.duplicate_note)) }
                     TextButton(onClick = { editing = null }) { Text(stringResource(R.string.cancel)) }
                 }
             }

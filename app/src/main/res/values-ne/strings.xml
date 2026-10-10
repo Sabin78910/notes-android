@@ -69,4 +69,7 @@
     <string name="export_note">पाठ फाइलको रूपमा निर्यात गर्नुहोस्</string>
     <string name="msg_note_exported">नोट निर्यात गरियो</string>
     <string name="msg_note_export_failed">नोट निर्यात गर्न सकिएन</string>
+    <string name="duplicate_note">प्रतिलिपि</string>
+    <string name="duplicate_note_description">नोटको प्रतिलिपि बनाउनुहोस्</string>
+    <string name="msg_note_duplicated">नोटको प्रतिलिपि बनाइयो</string>
 </resources>
