@@ -60,4 +60,6 @@
     <string name="page_of">%2$d मध्ये %1$d</string>
     <string name="more_items">+%1$d थप</string>
     <string name="created_at">सिर्जना: %1$s</string>
+    <string name="share">साझा गर्नुहोस्</string>
+    <string name="share_note_description">नोट पाठको रूपमा साझा गर्नुहोस्</string>
 </resources>
