@@ -42,13 +42,13 @@ class ReminderReceiver : BroadcastReceiver() {
         val note = NoteStore.deserialize(prefs.getString(KEY, "") ?: "").all().firstOrNull { it.id == id } ?: return
         if (note.trashedAt != null) return
         val nm = context.getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(NotificationChannel(CHANNEL, "Reminders", NotificationManager.IMPORTANCE_DEFAULT))
+        nm.createNotificationChannel(NotificationChannel(CHANNEL, context.getString(R.string.notif_channel), NotificationManager.IMPORTANCE_DEFAULT))
         val open = PendingIntent.getActivity(
             context, id.toInt(), Intent(context, MainActivity::class.java).putExtra(EXTRA_NOTE_ID, id).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         nm.notify(id.toInt(), NotificationCompat.Builder(context, CHANNEL)
-            .setSmallIcon(R.mipmap.ic_launcher).setContentTitle("Note reminder")
+            .setSmallIcon(R.mipmap.ic_launcher).setContentTitle(context.getString(R.string.notif_title))
             .setContentText(note.text.lineSequence().first().take(100)).setContentIntent(open).setAutoCancel(true).build())
     }
 }

@@ -43,6 +43,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextDecoration
@@ -135,7 +136,7 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
     }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         setRemindersEnabled(granted)
-        if (granted) pickingFor = reminderFor else scope.launch { snackbarHost.showSnackbar("Reminders need notification permission") }
+        if (granted) pickingFor = reminderFor else scope.launch { snackbarHost.showSnackbar(appContext.getString(R.string.msg_need_permission)) }
         reminderFor = null
     }
     fun save() {
@@ -163,16 +164,16 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
         if (uri != null) {
             val ok = runCatching { resolver.openOutputStream(uri, "wt")!!.use { it.write(Backup.export(store.all()).toByteArray()) } }.isSuccess
             if (!ok) reviewPrompt?.onError()
-            scope.launch { snackbarHost.showSnackbar(if (ok) "Backup saved" else "Could not save backup") }
+            scope.launch { snackbarHost.showSnackbar(appContext.getString(if (ok) R.string.msg_backup_saved else R.string.msg_backup_failed)) }
         }
     }
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             val text = runCatching { resolver.openInputStream(uri)!!.use { String(it.readBytes()) } }.getOrNull()
             val msg = when (val r = text?.let { Backup.import(store, it) }) {
-                is Backup.Result.Imported -> { save(); "Restored ${r.added} new notes" }
+                is Backup.Result.Imported -> { save(); appContext.getString(R.string.msg_restored, r.added) }
                 is Backup.Result.Error -> { reviewPrompt?.onError(); r.message }
-                null -> { reviewPrompt?.onError(); "Could not read file" }
+                null -> { reviewPrompt?.onError(); appContext.getString(R.string.msg_read_failed) }
             }
             scope.launch { snackbarHost.showSnackbar(msg) }
         }
@@ -189,61 +190,61 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
         LaunchedEffect(Unit) { focus.requestFocus() }
         AlertDialog(
             onDismissRequest = { adding = false; addAsChecklist = false },
-            title = { Text(if (addAsChecklist) "New checklist" else "New note") },
-            text = { OutlinedTextField(draft, { draft = it }, label = { Text(if (addAsChecklist) "One item per line" else "New note") }, modifier = Modifier.fillMaxWidth().focusRequester(focus)) },
+            title = { Text(if (addAsChecklist) stringResource(R.string.new_checklist) else stringResource(R.string.new_note)) },
+            text = { OutlinedTextField(draft, { draft = it }, label = { Text(if (addAsChecklist) stringResource(R.string.one_item_per_line) else stringResource(R.string.new_note)) }, modifier = Modifier.fillMaxWidth().focusRequester(focus)) },
             confirmButton = {
                 TextButton(
                     enabled = draft.isNotBlank(),
                     onClick = { val n = store.add(draft); if (addAsChecklist) store.setChecklist(n.id, true); draft = ""; adding = false; addAsChecklist = false; save(); reviewPrompt?.onNoteAdded(store.all().count { it.trashedAt == null }, System.currentTimeMillis()) }
-                ) { Text("Add note") }
+                ) { Text(stringResource(R.string.add_note_button)) }
             },
-            dismissButton = { TextButton(onClick = { adding = false; addAsChecklist = false }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { adding = false; addAsChecklist = false }) { Text(stringResource(R.string.cancel)) } }
         )
     }
 
     editing?.let { n ->
         AlertDialog(
             onDismissRequest = { editing = null },
-            title = { Text("Edit note") },
+            title = { Text(stringResource(R.string.edit_note_title)) },
             text = { OutlinedTextField(editText, { editText = it }, modifier = Modifier.fillMaxWidth()) },
             confirmButton = {
                 TextButton(
                     enabled = editText.isNotBlank(),
                     onClick = { store.edit(n.id, editText); editing = null; save() }
-                ) { Text("Save") }
+                ) { Text(stringResource(R.string.save)) }
             },
-            dismissButton = { TextButton(onClick = { editing = null }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { editing = null }) { Text(stringResource(R.string.cancel)) } }
         )
     }
 
     tagging?.let { n ->
         AlertDialog(
             onDismissRequest = { tagging = null },
-            title = { Text("Add tags") },
-            text = { OutlinedTextField(tagText, { tagText = it }, label = { Text("e.g. #work #ideas") }, modifier = Modifier.fillMaxWidth()) },
+            title = { Text(stringResource(R.string.add_tags_title)) },
+            text = { OutlinedTextField(tagText, { tagText = it }, label = { Text(stringResource(R.string.tags_hint)) }, modifier = Modifier.fillMaxWidth()) },
             confirmButton = {
                 TextButton(
                     enabled = Tags.parse(tagText).isNotEmpty(),
                     onClick = { store.addTags(n.id, tagText); tagging = null; save() }
-                ) { Text("Add") }
+                ) { Text(stringResource(R.string.add)) }
             },
-            dismissButton = { TextButton(onClick = { tagging = null }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { tagging = null }) { Text(stringResource(R.string.cancel)) } }
         )
     }
 
     if (explainReminders) {
         AlertDialog(
             onDismissRequest = { explainReminders = false; reminderFor = null },
-            title = { Text("Allow reminders?") },
-            text = { Text("Notes needs permission to show notifications so it can remind you about a note at the time you choose. You can turn reminders off any time.") },
+            title = { Text(stringResource(R.string.allow_reminders_title)) },
+            text = { Text(stringResource(R.string.allow_reminders_body)) },
             confirmButton = {
                 TextButton(onClick = {
                     explainReminders = false
                     if (ReminderPermission.granted(appContext)) { setRemindersEnabled(true); pickingFor = reminderFor; reminderFor = null }
                     else permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                }) { Text("Continue") }
+                }) { Text(stringResource(R.string.continue_label)) }
             },
-            dismissButton = { TextButton(onClick = { explainReminders = false; reminderFor = null }) { Text("Not now") } }
+            dismissButton = { TextButton(onClick = { explainReminders = false; reminderFor = null }) { Text(stringResource(R.string.not_now)) } }
         )
     }
 
@@ -253,7 +254,7 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
         val timeState = rememberTimePickerState()
         AlertDialog(
             onDismissRequest = { pickingFor = null },
-            title = { Text(if (date) "Reminder date" else "Reminder time") },
+            title = { Text(if (date) stringResource(R.string.reminder_date) else stringResource(R.string.reminder_time)) },
             text = { if (date) DatePicker(dateState, showModeToggle = false) else TimePicker(timeState) },
             confirmButton = {
                 TextButton(onClick = {
@@ -262,12 +263,12 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
                         val cal = java.util.Calendar.getInstance().apply {
                             set(utc.get(java.util.Calendar.YEAR), utc.get(java.util.Calendar.MONTH), utc.get(java.util.Calendar.DAY_OF_MONTH), timeState.hour, timeState.minute, 0)
                         }
-                        if (cal.timeInMillis <= System.currentTimeMillis()) scope.launch { snackbarHost.showSnackbar("Pick a time in the future") }
+                        if (cal.timeInMillis <= System.currentTimeMillis()) scope.launch { snackbarHost.showSnackbar(appContext.getString(R.string.msg_future_time)) }
                         else { store.setReminder(n.id, cal.timeInMillis); pickingFor = null; save() }
                     }
-                }) { Text(if (date) "Next" else "Set") }
+                }) { Text(if (date) stringResource(R.string.next) else stringResource(R.string.set)) }
             },
-            dismissButton = { TextButton(onClick = { pickingFor = null }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { pickingFor = null }) { Text(stringResource(R.string.cancel)) } }
         )
     }
 
@@ -275,7 +276,7 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
         store.delete(n.id); save()
         scope.launch {
             snackbarHost.currentSnackbarData?.dismiss()
-            val result = snackbarHost.showSnackbar("Note deleted", actionLabel = "Undo", duration = SnackbarDuration.Long)
+            val result = snackbarHost.showSnackbar(appContext.getString(R.string.msg_note_deleted), actionLabel = appContext.getString(R.string.undo), duration = SnackbarDuration.Long)
             if (result == SnackbarResult.ActionPerformed) { store.restore(n); save() }
         }
     }
@@ -285,7 +286,7 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             LargeTopAppBar(
-                title = { Text("Notes") },
+                title = { Text(stringResource(R.string.title_notes)) },
                 actions = {
                     IconButton(onClick = { newestFirst = !newestFirst }, modifier = Modifier.semantics { contentDescription = SortOrder.description(newestFirst) }) {
                         Text(SortOrder.glyph(newestFirst), style = MaterialTheme.typography.titleLarge)
@@ -299,10 +300,10 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
                     }
                     var menuOpen by remember { mutableStateOf(false) }
                     Box {
-                        IconButton(onClick = { menuOpen = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "More options") }
+                        IconButton(onClick = { menuOpen = true }) { Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.more_options)) }
                         DropdownMenu(menuOpen, { menuOpen = false }) {
-                            DropdownMenuItem(text = { Text("Back up") }, onClick = { menuOpen = false; exportLauncher.launch("notes-backup.json") })
-                            DropdownMenuItem(text = { Text("Restore") }, onClick = { menuOpen = false; importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.back_up)) }, onClick = { menuOpen = false; exportLauncher.launch("notes-backup.json") })
+                            DropdownMenuItem(text = { Text(stringResource(R.string.restore)) }, onClick = { menuOpen = false; importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) })
                         }
                     }
                 },
@@ -313,7 +314,7 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
             ExtendedFloatingActionButton(
                 onClick = { addAsChecklist = false; adding = true },
                 icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                text = { Text("New note") }
+                text = { Text(stringResource(R.string.new_note)) }
             )
         },
         snackbarHost = { SnackbarHost(snackbarHost) }
@@ -328,25 +329,26 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
           item(span = StaggeredGridItemSpan.FullLine) { Column {
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                 val views = listOf("Notes", "Archive", "Trash")
+                val viewLabels = listOf(R.string.title_notes, R.string.archive, R.string.trash)
                 views.forEachIndexed { i, v ->
                     SegmentedButton(
                         selected = view == v, onClick = { view = v },
                         shape = SegmentedButtonDefaults.itemShape(i, views.size),
-                        label = { Text(v) }
+                        label = { Text(stringResource(viewLabels[i])) }
                     )
                 }
             }
             if (view == "Trash") {
-                TextButton(onClick = { store.emptyTrash(); save() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Empty trash") }
-                Text("Notes in Trash are deleted after 30 days.", style = MaterialTheme.typography.bodySmall)
+                TextButton(onClick = { store.emptyTrash(); save() }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.empty_trash)) }
+                Text(stringResource(R.string.trash_note), style = MaterialTheme.typography.bodySmall)
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Reminders")
+                Text(stringResource(R.string.reminders))
                 Switch(remindersOn, { on -> if (on) explainReminders = true else setRemindersEnabled(false) })
             }
             TextField(
                 query, { query = it },
-                placeholder = { Text("Search notes") },
+                placeholder = { Text(stringResource(R.string.search_notes)) },
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                 singleLine = true,
                 shape = RoundedCornerShape(28.dp),
@@ -354,7 +356,7 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
             )
             Row(Modifier.edgeFade().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                FilterChip(colorFilter == null, { colorFilter = null }, label = { Text("All") })
+                FilterChip(colorFilter == null, { colorFilter = null }, label = { Text(stringResource(R.string.all)) })
                 NoteColor.entries.forEach { c ->
                     FilterChip(
                         colorFilter == c, { colorFilter = if (colorFilter == c) null else c },
@@ -389,7 +391,7 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
                             Text(EmptyState.helper(view, filtered), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
                             if (EmptyState.showNewNoteAction(view, filtered)) {
                                 Spacer(Modifier.height(16.dp))
-                                FilledTonalButton(onClick = { addAsChecklist = false; adding = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text("New note") }
+                                FilledTonalButton(onClick = { addAsChecklist = false; adding = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.new_note)) }
                             }
                         }
                     }
@@ -426,14 +428,14 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
                                         Text(item, textDecoration = if (ticked) TextDecoration.LineThrough else null)
                                     }
                                 }
-                                if (NotePreview.hiddenItems(n) > 0) Text("+${NotePreview.hiddenItems(n)} more", style = MaterialTheme.typography.labelMedium)
+                                if (NotePreview.hiddenItems(n) > 0) Text(stringResource(R.string.more_items, NotePreview.hiddenItems(n)), style = MaterialTheme.typography.labelMedium)
                                 if (Checklist.shouldCelebrate(p, animationsEnabled)) {
-                                    Text("🎉 All done!", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                                    Text(stringResource(R.string.all_done), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
                                 }
                             } else Text(NotePreview.text(n), maxLines = NotePreview.MAX_LINES, overflow = TextOverflow.Ellipsis)
                             if (n.createdAt > 0) {
                                 Text(
-                                    "Created " + DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(n.createdAt)),
+                                    stringResource(R.string.created_at, DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(n.createdAt))),
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }
@@ -443,29 +445,30 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
                             if (n.tags.isNotEmpty()) {
                                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     n.tags.forEach { t ->
+                                        val removeTagDesc = stringResource(R.string.remove_tag, t)
                                         AssistChip(
                                             onClick = { store.removeTag(n.id, t); save() },
                                             label = { Text("#$t ✕") },
-                                            modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "Remove tag $t" }
+                                            modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = removeTagDesc }
                                         )
                                     }
                                 }
                             }
                             Row {
                                 if (view == "Trash") {
-                                    TextButton(onClick = { store.restoreFromTrash(n.id); save() }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)) { Text("Restore") }
+                                    TextButton(onClick = { store.restoreFromTrash(n.id); save() }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)) { Text(stringResource(R.string.restore)) }
                                 } else {
-                                TextButton(onClick = { editText = n.text; editing = n }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp).semantics { contentDescription = PinPresentation.editDescription(n.text) }) { Text("Edit") }
+                                TextButton(onClick = { editText = n.text; editing = n }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp).semantics { contentDescription = PinPresentation.editDescription(n.text) }) { Text(stringResource(R.string.edit)) }
                                 TextButton(onClick = { store.togglePin(n.id); save() }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp).semantics { contentDescription = PinPresentation.pinDescription(n.pinned, n.text) }) { Text(PinPresentation.buttonLabel(n.pinned)) }
-                                TextButton(onClick = { store.setChecklist(n.id, !n.checklist); save() }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)) { Text(if (n.checklist) "Plain note" else "Checklist") }
-                                TextButton(onClick = { store.setColor(n.id, NoteColor.entries.let { e -> if (n.color == null) e.first() else e.getOrNull(n.color.ordinal + 1) }); save() }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)) { Text(n.color?.let { "Colour: ${it.label}" } ?: "Colour") }
-                                TextButton(onClick = { tagText = ""; tagging = n }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)) { Text("Tag") }
+                                TextButton(onClick = { store.setChecklist(n.id, !n.checklist); save() }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)) { Text(if (n.checklist) stringResource(R.string.plain_note) else stringResource(R.string.checklist)) }
+                                TextButton(onClick = { store.setColor(n.id, NoteColor.entries.let { e -> if (n.color == null) e.first() else e.getOrNull(n.color.ordinal + 1) }); save() }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)) { Text(n.color?.let { stringResource(R.string.colour_named, it.label) } ?: stringResource(R.string.colour)) }
+                                TextButton(onClick = { tagText = ""; tagging = n }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)) { Text(stringResource(R.string.tag)) }
                                 TextButton(
                                     onClick = { if (n.remindAt != null) { store.clearReminder(n.id); save() } else if (remindersOn) pickingFor = n else { reminderFor = n; explainReminders = true } },
                                     modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)
-                                ) { Text(if (n.remindAt != null) "Clear reminder" else "Remind") }
-                                TextButton(onClick = { deleteWithUndo(n) }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp).semantics { contentDescription = PinPresentation.deleteDescription(n.text) }) { Text("Delete") }
-                                TextButton(onClick = { if (n.archived) store.unarchive(n.id) else store.archive(n.id); save() }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)) { Text(if (n.archived) "Unarchive" else "Archive") }
+                                ) { Text(if (n.remindAt != null) stringResource(R.string.clear_reminder) else stringResource(R.string.remind)) }
+                                TextButton(onClick = { deleteWithUndo(n) }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp).semantics { contentDescription = PinPresentation.deleteDescription(n.text) }) { Text(stringResource(R.string.delete)) }
+                                TextButton(onClick = { if (n.archived) store.unarchive(n.id) else store.archive(n.id); save() }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)) { Text(if (n.archived) stringResource(R.string.unarchive) else stringResource(R.string.archive)) }
                                 }
                             }
                         }

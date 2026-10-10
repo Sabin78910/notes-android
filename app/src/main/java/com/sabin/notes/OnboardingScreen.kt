@@ -7,6 +7,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
@@ -21,7 +22,7 @@ fun OnboardingScreen(onDone: () -> Unit) {
     Surface(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().safeDrawingPadding().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = onDone, modifier = Modifier.heightIn(min = 48.dp)) { Text("Skip") }
+                TextButton(onClick = onDone, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.skip)) }
             }
             Spacer(Modifier.weight(1f))
             Image(painterResource(illustrations[index]), contentDescription = null, modifier = Modifier.size(200.dp))
@@ -30,10 +31,10 @@ fun OnboardingScreen(onDone: () -> Unit) {
             Spacer(Modifier.height(8.dp))
             Text(page.benefit, style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
             Spacer(Modifier.weight(1f))
-            Text("${index + 1} of ${Onboarding.pages.size}", style = MaterialTheme.typography.labelMedium)
+            Text(stringResource(R.string.page_of, index + 1, Onboarding.pages.size), style = MaterialTheme.typography.labelMedium)
             Spacer(Modifier.height(12.dp))
             Button(onClick = { if (last) onDone() else index++ }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                Text(if (last) "Write your first note" else "Next")
+                Text(if (last) stringResource(R.string.write_first_note) else stringResource(R.string.next))
             }
         }
     }
