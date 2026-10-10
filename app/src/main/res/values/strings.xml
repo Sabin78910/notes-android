@@ -72,4 +72,14 @@
     <string name="duplicate_note">Duplicate</string>
     <string name="duplicate_note_description">Duplicate note</string>
     <string name="msg_note_duplicated">Note duplicated</string>
+    <string name="count_summary">%1$s · %2$s</string>
+    <string name="checklist_done_count">%1$d of %2$d done</string>
+    <plurals name="word_count">
+        <item quantity="one">%d word</item>
+        <item quantity="other">%d words</item>
+    </plurals>
+    <plurals name="character_count">
+        <item quantity="one">%d character</item>
+        <item quantity="other">%d characters</item>
+    </plurals>
 </resources>

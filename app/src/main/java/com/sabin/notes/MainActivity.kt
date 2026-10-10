@@ -44,7 +44,9 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
@@ -233,7 +235,20 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
         AlertDialog(
             onDismissRequest = { editing = null },
             title = { Text(stringResource(R.string.edit_note_title)) },
-            text = { OutlinedTextField(editText, { editText = it }, modifier = Modifier.fillMaxWidth()) },
+            text = {
+                Column {
+                    OutlinedTextField(editText, { editText = it }, modifier = Modifier.fillMaxWidth())
+                    val res = LocalContext.current.resources
+                    val summary = if (n.checklist) {
+                        val p = WordCount.checklistProgress(editText, n.checked)
+                        stringResource(R.string.checklist_done_count, p.done, p.total)
+                    } else {
+                        val c = WordCount.of(editText)
+                        stringResource(R.string.count_summary, res.getQuantityString(R.plurals.word_count, c.words, c.words), res.getQuantityString(R.plurals.character_count, c.characters, c.characters))
+                    }
+                    Text(summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp).semantics { contentDescription = summary; liveRegion = LiveRegionMode.Polite })
+                }
+            },
             confirmButton = {
                 TextButton(
                     enabled = editText.isNotBlank(),
