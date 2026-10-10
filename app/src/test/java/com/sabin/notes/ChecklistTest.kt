@@ -78,4 +78,24 @@ class ChecklistTest {
         s.toggleItem(id, 2); s.edit(id, "a\nb")
         assertTrue(s.visible().single().checked.isEmpty())
     }
+
+    @Test fun fractionIsZeroForEmptyAndRatioOtherwise() {
+        assertEquals(0f, Checklist.Progress(0, 0).fraction, 0f)
+        assertEquals(0.5f, Checklist.Progress(1, 2).fraction, 0f)
+        assertEquals(1f, Checklist.Progress(3, 3).fraction, 0f)
+    }
+
+    @Test fun sectionsMoveTickedItemsToDoneKeepingOriginalIndex() {
+        val (s, id) = checklist("a\nb\nc\nd")
+        s.toggleItem(id, 0); s.toggleItem(id, 2)
+        val sec = Checklist.sections(s.visible().single())
+        assertEquals(listOf(1 to "b", 3 to "d"), sec.open.map { it.index to it.text })
+        assertEquals(listOf(0 to "a", 2 to "c"), sec.done.map { it.index to it.text })
+    }
+
+    @Test fun sectionsWithNothingTickedHaveNoDone() {
+        val (s, _) = checklist()
+        val sec = Checklist.sections(s.visible().single())
+        assertEquals(3, sec.open.size); assertTrue(sec.done.isEmpty())
+    }
 }
