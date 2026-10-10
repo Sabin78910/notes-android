@@ -8,7 +8,7 @@ class PlayTargetSdkTest {
     private val script = File("build.gradle.kts").readText()
 
     @Test
-    fun compileSdkIs36() = assertTrue(Regex("""compileSdk\s*=\s*36\b""").containsMatchIn(script))
+    fun compileSdkIs37() = assertTrue(Regex("""compileSdk\s*=\s*37\b""").containsMatchIn(script))
 
     @Test
     fun targetSdkIs36() = assertTrue(Regex("""targetSdk\s*=\s*36\b""").containsMatchIn(script))
