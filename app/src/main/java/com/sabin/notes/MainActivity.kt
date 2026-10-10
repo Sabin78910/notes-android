@@ -55,11 +55,18 @@ import java.util.Date
 class MainActivity : ComponentActivity() {
     private var launchAction by mutableStateOf<LaunchAction?>(null)
     private var openNoteId by mutableStateOf<Long?>(null)
+    private var sharedText by mutableStateOf<String?>(null)
+
+    private fun readShared(intent: Intent?) {
+        if (intent?.action != Intent.ACTION_SEND || intent.type != "text/plain") return
+        sharedText = ShareText.incoming(intent.getStringExtra(Intent.EXTRA_SUBJECT), intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString())
+    }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         launchAction = LaunchAction.fromName(intent.getStringExtra(LaunchAction.EXTRA))
         openNoteId = intent.getLongExtra(EXTRA_NOTE_ID, -1L).takeIf { it >= 0 }
+        readShared(intent)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -70,8 +77,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         launchAction = LaunchAction.fromName(intent?.getStringExtra(LaunchAction.EXTRA))
         openNoteId = intent?.getLongExtra(EXTRA_NOTE_ID, -1L)?.takeIf { it >= 0 }
+        if (savedInstanceState == null) readShared(intent)
         setContent {
-            NotesTheme { NotesScreen(launchAction, onLaunchActionHandled = { launchAction = null }, openNoteId, onNoteOpened = { openNoteId = null }) }
+            NotesTheme { NotesScreen(launchAction, onLaunchActionHandled = { launchAction = null }, openNoteId, onNoteOpened = { openNoteId = null }, sharedText, onSharedHandled = { sharedText = null }) }
         }
     }
 }
@@ -83,7 +91,7 @@ private const val KEY_ONBOARDED = "onboarded"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () -> Unit = {}, openNoteId: Long? = null, onNoteOpened: () -> Unit = {}) {
+fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () -> Unit = {}, openNoteId: Long? = null, onNoteOpened: () -> Unit = {}, sharedText: String? = null, onSharedHandled: () -> Unit = {}) {
     val prefs = LocalContext.current.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     val store = remember { NoteStore.deserialize(prefs.getString(KEY, "") ?: "") .also { it.purgeExpired() } }
     val activity = androidx.activity.compose.LocalActivity.current
@@ -152,6 +160,15 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
         }
     }
 
+    LaunchedEffect(sharedText) {
+        if (sharedText != null) {
+            draft = sharedText
+            addAsChecklist = false
+            adding = true
+            onSharedHandled()
+        }
+    }
+
     LaunchedEffect(launchAction) {
         if (launchAction != null) {
             addAsChecklist = launchAction == LaunchAction.NEW_CHECKLIST
@@ -213,7 +230,18 @@ fun NotesScreen(launchAction: LaunchAction? = null, onLaunchActionHandled: () ->
                     onClick = { store.edit(n.id, editText); editing = null; save() }
                 ) { Text(stringResource(R.string.save)) }
             },
-            dismissButton = { TextButton(onClick = { editing = null }) { Text(stringResource(R.string.cancel)) } }
+            dismissButton = {
+                Row {
+                    TextButton(
+                        onClick = {
+                            val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, ShareText.outgoing(n.copy(text = editText)))
+                            appContext.startActivity(Intent.createChooser(send, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                        },
+                        modifier = Modifier.semantics { contentDescription = appContext.getString(R.string.share_note_description) }
+                    ) { Text(stringResource(R.string.share)) }
+                    TextButton(onClick = { editing = null }) { Text(stringResource(R.string.cancel)) }
+                }
+            }
         )
     }
 
