@@ -87,4 +87,7 @@
     <string name="app_lock_unlock">अनलक गर्नुहोस्</string>
     <string name="app_lock_prompt_title">नोट्स अनलक गर्नुहोस्</string>
     <string name="app_lock_prompt_body">आफ्ना नोटहरू खोल्न स्क्रिन लक पुष्टि गर्नुहोस्।</string>
+    <string name="a11y_pinned">पिन गरिएको</string>
+    <string name="a11y_colour">रङ: %1$s</string>
+    <string name="a11y_tags">ट्यागहरू: %1$s</string>
 </resources>
