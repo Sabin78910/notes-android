@@ -130,6 +130,8 @@ internal const val PREFS = "notes"
 internal const val KEY = "data"
 private const val KEY_LAYOUT = "layout"
 private const val KEY_ONBOARDED = "onboarded"
+private const val KEY_STREAK = "streak_days"
+private const val KEY_STREAK_CELEBRATED = "streak_celebrated"
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -152,6 +154,9 @@ fun NotesScreen(appLockAvailable: Boolean = false, appLockEnabled: Boolean = fal
         }
     }
     var onboarding by remember { mutableStateOf(Onboarding.shouldShow(onboardingFlag)) }
+    val tzOffset = { java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis()).toLong() }
+    var streakDays by remember { mutableStateOf(WritingStreak.parse(prefs.getString(KEY_STREAK, "") ?: "")) }
+    val streak = WritingStreak.current(streakDays, WritingStreak.dayOf(System.currentTimeMillis(), tzOffset()))
     var query by remember { mutableStateOf("") }
     var layout by remember { mutableStateOf(LayoutMode.fromName(prefs.getString(KEY_LAYOUT, null))) }
     var newestFirst by remember { mutableStateOf(true) }
@@ -189,6 +194,16 @@ fun NotesScreen(appLockAvailable: Boolean = false, appLockEnabled: Boolean = fal
         setRemindersEnabled(granted)
         if (granted) pickingFor = reminderFor else scope.launch { snackbarHost.showSnackbar(appContext.getString(R.string.msg_need_permission)) }
         reminderFor = null
+    }
+    fun recordWriting() {
+        val now = System.currentTimeMillis()
+        streakDays = WritingStreak.record(streakDays, WritingStreak.dayOf(now, tzOffset()))
+        prefs.edit().putString(KEY_STREAK, WritingStreak.serialize(streakDays)).apply()
+        val days = WritingStreak.current(streakDays, WritingStreak.dayOf(now, tzOffset()))
+        if (WritingStreak.milestone(days) != null && days != prefs.getInt(KEY_STREAK_CELEBRATED, 0)) {
+            prefs.edit().putInt(KEY_STREAK_CELEBRATED, days).apply()
+            scope.launch { snackbarHost.showSnackbar("🎉 $days days in a row — keep writing!") }
+        }
     }
     fun save() {
         prefs.edit().putString(KEY, store.serialize()).apply(); version++
@@ -265,7 +280,7 @@ fun NotesScreen(appLockAvailable: Boolean = false, appLockEnabled: Boolean = fal
             confirmButton = {
                 TextButton(
                     enabled = draft.isNotBlank(),
-                    onClick = { val n = store.add(draft); if (addAsChecklist) store.setChecklist(n.id, true); draft = ""; adding = false; addAsChecklist = false; save(); reviewPrompt?.onNoteAdded(store.all().count { it.trashedAt == null }, System.currentTimeMillis()) }
+                    onClick = { val n = store.add(draft); if (addAsChecklist) store.setChecklist(n.id, true); draft = ""; adding = false; addAsChecklist = false; recordWriting(); save(); reviewPrompt?.onNoteAdded(store.all().count { it.trashedAt == null }, System.currentTimeMillis()) }
                 ) { Text(stringResource(R.string.add_note_button)) }
             },
             dismissButton = { TextButton(onClick = { adding = false; addAsChecklist = false }) { Text(stringResource(R.string.cancel)) } }
@@ -293,7 +308,7 @@ fun NotesScreen(appLockAvailable: Boolean = false, appLockEnabled: Boolean = fal
             confirmButton = {
                 TextButton(
                     enabled = editText.isNotBlank(),
-                    onClick = { store.edit(n.id, editText); editing = null; save() }
+                    onClick = { store.edit(n.id, editText); editing = null; recordWriting(); save() }
                 ) { Text(stringResource(R.string.save)) }
             },
             dismissButton = {
@@ -396,6 +411,13 @@ fun NotesScreen(appLockAvailable: Boolean = false, appLockEnabled: Boolean = fal
             LargeTopAppBar(
                 title = { Text(stringResource(R.string.title_notes)) },
                 actions = {
+                    if (streak > 0) {
+                        AssistChip(
+                            onClick = {},
+                            label = { Text("🔥 $streak") },
+                            modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = WritingStreak.description(streak) }
+                        )
+                    }
                     IconButton(onClick = { newestFirst = !newestFirst }, modifier = Modifier.semantics { contentDescription = SortOrder.description(newestFirst) }) {
                         Text(SortOrder.glyph(newestFirst), style = MaterialTheme.typography.titleLarge)
                     }
@@ -493,11 +515,7 @@ fun NotesScreen(appLockAvailable: Boolean = false, appLockEnabled: Boolean = fal
                     item(span = StaggeredGridItemSpan.FullLine) {
                         val filtered = query.isNotBlank() || colorFilter != null || tagFilter != null
                         Column(Modifier.fillMaxWidth().padding(vertical = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Surface(shape = RoundedCornerShape(40.dp), color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.size(144.dp)) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Text(EmptyState.icon(view, filtered), style = MaterialTheme.typography.displayLarge.copy(fontSize = MaterialTheme.typography.displayLarge.fontSize * 1.5f))
-                                }
-                            }
+                            EmptyIllustrationView(EmptyState.illustration(view, filtered), MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer, MaterialTheme.colorScheme.primary, Modifier.clearAndSetSemantics { })
                             Spacer(Modifier.height(16.dp))
                             Text(EmptyState.message(view, filtered), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
                             Text(EmptyState.helper(view, filtered), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
