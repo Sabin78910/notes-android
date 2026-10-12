@@ -1,5 +1,7 @@
 package com.sabin.notes
 
+import java.util.Base64
+
 /** JSON backup/restore of notes; plain Kotlin (org.json is unavailable in unit tests). */
 object Backup {
     sealed class Result {
@@ -9,7 +11,8 @@ object Backup {
 
     const val VERSION = 1
 
-    fun export(notes: List<Note>): String = buildString {
+    /** [readImage] supplies the bytes of an attached photo (null if the file is missing); photos are embedded as base64. */
+    fun export(notes: List<Note>, readImage: (String) -> ByteArray? = { null }): String = buildString {
         append("{\"version\":$VERSION,\"notes\":[")
         notes.forEachIndexed { i, n ->
             if (i > 0) append(',')
@@ -18,13 +21,20 @@ object Backup {
             append(",\"checked\":[${n.checked.sorted().joinToString(",")}]")
             append(",\"color\":").append(n.color?.let { quote(it.name) } ?: "null")
             append(",\"archived\":${n.archived},\"trashedAt\":${n.trashedAt ?: "null"}")
-            append(",\"tags\":[${n.tags.joinToString(",") { quote(it) }}]}")
+            append(",\"tags\":[${n.tags.joinToString(",") { quote(it) }}]")
+            append(",\"images\":[${n.images.joinToString(",") { quote(it) }}]}")
         }
-        append("]}")
+        append("],\"files\":{")
+        val files = notes.flatMap { it.images }.distinct().mapNotNull { name -> readImage(name)?.let { name to it } }
+        files.forEachIndexed { i, (name, bytes) ->
+            if (i > 0) append(',')
+            append(quote(name)).append(':').append(quote(Base64.getEncoder().encodeToString(bytes)))
+        }
+        append("}}")
     }
 
     /** Merges [json] into [store]; notes already present (same text and creation time) are skipped. Nothing changes on error. */
-    fun import(store: NoteStore, json: String): Result {
+    fun import(store: NoteStore, json: String, writeImage: (String, ByteArray) -> Unit = { _, _ -> }): Result {
         val parsed = try {
             parseNotes(json)
         } catch (e: IllegalArgumentException) {
@@ -32,16 +42,24 @@ object Backup {
         }
         val known = store.all().map { it.text to it.createdAt }.toMutableSet()
         var added = 0
-        for (n in parsed) if (known.add(n.text to n.createdAt)) { store.addImported(n); added++ }
+        for ((n, files) in parsed) if (known.add(n.text to n.createdAt)) {
+            files.forEach { (name, bytes) -> writeImage(name, bytes) }
+            store.addImported(n); added++
+        }
         return Result.Imported(added)
     }
 
-    private fun parseNotes(json: String): List<Note> {
+    private fun parseNotes(json: String): List<Pair<Note, Map<String, ByteArray>>> {
         val root = Parser(json).parseDocument() as? Map<*, *> ?: bad()
         if (root["version"] != VERSION.toLong()) bad()
         val list = root["notes"] as? List<*> ?: bad()
+        val embedded = root["files"] as? Map<*, *> ?: emptyMap<String, Any?>()
         return list.map { item ->
             val m = item as? Map<*, *> ?: bad()
+            val images = (m["images"] as? List<*>)?.map { (it as? String)?.takeIf(ImageName::isSafe) ?: bad() } ?: emptyList()
+            val files = images.mapNotNull { name ->
+                (embedded[name] as? String)?.let { name to (try { Base64.getDecoder().decode(it) } catch (e: IllegalArgumentException) { bad() }) }
+            }.toMap()
             Note(
                 id = 0,
                 text = (m["text"] as? String)?.takeIf { it.isNotBlank() } ?: bad(),
@@ -52,8 +70,9 @@ object Backup {
                 color = NoteColor.fromName(m["color"] as? String),
                 archived = m["archived"] as? Boolean ?: false,
                 trashedAt = m["trashedAt"] as? Long,
-                tags = (m["tags"] as? List<*>)?.map { it as? String ?: bad() }?.let { Tags.parse(it.joinToString(" ")) } ?: emptySet()
-            )
+                tags = (m["tags"] as? List<*>)?.map { it as? String ?: bad() }?.let { Tags.parse(it.joinToString(" ")) } ?: emptySet(),
+                images = images.filter { it in files }
+            ) to files
         }
     }
 

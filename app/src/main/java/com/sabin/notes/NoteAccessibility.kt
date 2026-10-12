@@ -4,18 +4,19 @@ package com.sabin.notes
 object NoteAccessibility {
     const val MAX_TITLE = 60
 
-    class Labels(val pinned: String, val colour: (String) -> String, val tags: (String) -> String)
+    class Labels(val pinned: String, val colour: (String) -> String, val tags: (String) -> String, val photos: (Int) -> String = { "" })
 
     fun title(text: String): String {
         val line = text.trim().lineSequence().first().trim()
         return if (line.length > MAX_TITLE) line.take(MAX_TITLE) + "…" else line
     }
 
-    fun describe(text: String, pinned: Boolean, colourLabel: String?, tags: Collection<String>, labels: Labels): String =
+    fun describe(text: String, pinned: Boolean, colourLabel: String?, tags: Collection<String>, labels: Labels, imageCount: Int = 0): String =
         listOfNotNull(
             title(text).ifEmpty { null },
             if (pinned) labels.pinned else null,
             colourLabel?.let(labels.colour),
-            if (tags.isEmpty()) null else labels.tags(tags.joinToString(", "))
+            if (tags.isEmpty()) null else labels.tags(tags.joinToString(", ")),
+            if (imageCount > 0) labels.photos(imageCount) else null
         ).joinToString(". ")
 }

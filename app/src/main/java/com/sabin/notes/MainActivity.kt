@@ -17,6 +17,16 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.draw.clip
+import androidx.compose.runtime.produceState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridItemScope
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
@@ -143,7 +153,8 @@ private const val KEY_STREAK_CELEBRATED = "streak_celebrated"
 @Composable
 fun NotesScreen(appLockAvailable: Boolean = false, appLockEnabled: Boolean = false, onAppLockChange: (Boolean) -> Unit = {}, launchAction: LaunchAction? = null, onLaunchActionHandled: () -> Unit = {}, openNoteId: Long? = null, onNoteOpened: () -> Unit = {}, sharedText: String? = null, onSharedHandled: () -> Unit = {}) {
     val prefs = LocalContext.current.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-    val store = remember { NoteStore.deserialize(prefs.getString(KEY, "") ?: "") .also { it.purgeExpired() } }
+    val imageFiles = LocalContext.current.applicationContext.let { c -> remember { c.imageFiles() } }
+    val store = remember { NoteStore.deserialize(prefs.getString(KEY, "") ?: "") .also { it.purgeExpired(); imageFiles.sweep(it) } }
     val activity = androidx.activity.compose.LocalActivity.current
     val reviewPrompt = remember {
         activity?.let { ReviewPrompt(PrefsReviewState(prefs), PlayReviewGateway(it)).also { r -> r.onAppLaunch(System.currentTimeMillis()) } }
@@ -243,7 +254,7 @@ fun NotesScreen(appLockAvailable: Boolean = false, appLockEnabled: Boolean = fal
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) {
-            val ok = runCatching { resolver.openOutputStream(uri, "wt")!!.use { it.write(Backup.export(store.all()).toByteArray()) } }.isSuccess
+            val ok = runCatching { resolver.openOutputStream(uri, "wt")!!.use { it.write(Backup.export(store.all()) { name -> imageFiles.fileOrNull(name)?.takeIf { it.exists() }?.readBytes() }.toByteArray()) } }.isSuccess
             if (!ok) reviewPrompt?.onError()
             scope.launch { snackbarHost.showSnackbar(appContext.getString(if (ok) R.string.msg_backup_saved else R.string.msg_backup_failed)) }
         }
@@ -258,10 +269,28 @@ fun NotesScreen(appLockAvailable: Boolean = false, appLockEnabled: Boolean = fal
             scope.launch { snackbarHost.showSnackbar(appContext.getString(if (ok) R.string.msg_note_exported else R.string.msg_note_export_failed)) }
         }
     }
+    var photoFor by remember { mutableStateOf<Long?>(null) }
+    val photoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        val id = photoFor
+        photoFor = null
+        if (uri != null && id != null) scope.launch {
+            val name = withContext(Dispatchers.IO) { importImage(appContext, uri, imageFiles) }
+            if (name != null) { store.addImage(id, name); save() } else snackbarHost.showSnackbar(appContext.getString(R.string.msg_photo_failed))
+        }
+    }
+    fun removePhotoWithUndo(noteId: Long, name: String) {
+        val index = store.all().firstOrNull { it.id == noteId }?.images?.indexOf(name) ?: return
+        store.removeImage(noteId, name); save()
+        scope.launch {
+            snackbarHost.currentSnackbarData?.dismiss()
+            val result = snackbarHost.showSnackbar(appContext.getString(R.string.msg_photo_removed), actionLabel = appContext.getString(R.string.undo), duration = SnackbarDuration.Long)
+            if (result == SnackbarResult.ActionPerformed) { store.addImage(noteId, name, index); save() } else imageFiles.sweep(store)
+        }
+    }
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             val text = runCatching { resolver.openInputStream(uri)!!.use { String(it.readBytes()) } }.getOrNull()
-            val msg = when (val r = text?.let { Backup.import(store, it) }) {
+            val msg = when (val r = text?.let { Backup.import(store, it) { name, bytes -> imageFiles.fileOrNull(name)?.writeBytes(bytes) } }) {
                 is Backup.Result.Imported -> { save(); appContext.getString(R.string.msg_restored, r.added) }
                 is Backup.Result.Error -> { reviewPrompt?.onError(); r.message }
                 null -> { reviewPrompt?.onError(); appContext.getString(R.string.msg_read_failed) }
@@ -298,7 +327,20 @@ fun NotesScreen(appLockAvailable: Boolean = false, appLockEnabled: Boolean = fal
             onDismissRequest = { editing = null },
             title = { Text(stringResource(R.string.edit_note_title)) },
             text = {
-                Column {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    val images = remember(version) { store.all().firstOrNull { it.id == n.id }?.images ?: emptyList() }
+                    images.forEachIndexed { i, name ->
+                        Column(Modifier.padding(bottom = 8.dp)) {
+                            NoteImage(imageFiles, name, 1024, stringResource(R.string.photo_description, i + 1, images.size), Modifier.fillMaxWidth().heightIn(max = 280.dp))
+                            val removeDesc = stringResource(R.string.remove_photo_description, i + 1, images.size)
+                            TextButton(onClick = { removePhotoWithUndo(n.id, name) }, modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp).semantics { contentDescription = removeDesc }) { Text(stringResource(R.string.remove_photo)) }
+                        }
+                    }
+                    val addPhotoDesc = stringResource(R.string.add_photo_description)
+                    TextButton(
+                        onClick = { photoFor = n.id; photoLauncher.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                        modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = addPhotoDesc }
+                    ) { Text(stringResource(R.string.add_photo)) }
                     OutlinedTextField(editText, { editText = it }, textStyle = MaterialTheme.typography.titleLarge, modifier = Modifier.fillMaxWidth())
                     val res = LocalContext.current.resources
                     val summary = if (n.checklist) {
@@ -489,7 +531,7 @@ fun NotesScreen(appLockAvailable: Boolean = false, appLockEnabled: Boolean = fal
                 }
             }
             if (view == "Trash") {
-                TextButton(onClick = { store.emptyTrash(); save() }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.empty_trash)) }
+                TextButton(onClick = { store.emptyTrash(); imageFiles.sweep(store); save() }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.empty_trash)) }
                 Text(stringResource(R.string.trash_note), style = MaterialTheme.typography.bodySmall)
             }
             if (appLockAvailable) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -557,9 +599,10 @@ fun NotesScreen(appLockAvailable: Boolean = false, appLockEnabled: Boolean = fal
                     val cardLabels = NoteAccessibility.Labels(
                         pinned = stringResource(R.string.a11y_pinned),
                         colour = { colourFmt.replace("%1\$s", it) },
-                        tags = { tagsFmt.replace("%1\$s", it) }
+                        tags = { tagsFmt.replace("%1\$s", it) },
+                        photos = { appContext.resources.getQuantityString(R.plurals.a11y_photos, it, it) }
                     )
-                    val cardDesc = NoteAccessibility.describe(n.text, n.pinned, n.color?.label, n.tags, cardLabels)
+                    val cardDesc = NoteAccessibility.describe(n.text, n.pinned, n.color?.label, n.tags, cardLabels, n.images.size)
                     Card(
                         Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = cardDesc }.then(
                             if (NoteSections.useSpringMotion(if (animationsEnabled) 1f else 0f)) Modifier.animateItem(
@@ -570,6 +613,17 @@ fun NotesScreen(appLockAvailable: Boolean = false, appLockEnabled: Boolean = fal
                         ),
                         colors = n.color?.let { CardDefaults.cardColors(containerColor = Color(it.background(dark)), contentColor = fg) } ?: CardDefaults.cardColors()
                     ) {
+                        n.images.firstOrNull()?.let { first ->
+                            Box {
+                                NoteImage(imageFiles, first, 512, null, Modifier.fillMaxWidth().heightIn(max = 180.dp))
+                                if (n.images.size > 1) Text(
+                                    stringResource(R.string.more_photos, n.images.size - 1),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp).background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(12.dp)).padding(horizontal = 8.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
                         Column(Modifier.padding(16.dp)) {
                             PinPresentation.badge(n.pinned)?.let {
                                 Text("📌 $it", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
@@ -690,3 +744,10 @@ private fun Modifier.edgeFade(width: Float = 32f): Modifier = this
             blendMode = BlendMode.DstIn
         )
     }
+
+/** A stored photo, decoded off the main thread; [description] null means decorative (the card already announces the photo count). */
+@Composable
+private fun NoteImage(files: ImageFiles, name: String, maxEdge: Int, description: String?, modifier: Modifier) {
+    val bitmap by produceState<android.graphics.Bitmap?>(null, name, maxEdge) { value = withContext(Dispatchers.IO) { loadImage(files, name, maxEdge) } }
+    bitmap?.let { Image(it.asImageBitmap(), contentDescription = description, modifier = modifier, contentScale = ContentScale.Crop) }
+}

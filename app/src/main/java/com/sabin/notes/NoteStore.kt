@@ -11,7 +11,9 @@ data class Note(val id: Long, val text: String, val pinned: Boolean = false, val
     /** Lowercase labels, see [Tags]. */
     val tags: Set<String> = emptySet(),
     /** Epoch millis of the reminder; null if none. */
-    val remindAt: Long? = null
+    val remindAt: Long? = null,
+    /** File names (see [ImageName]) of attached photos in app-private storage, in display order. */
+    val images: List<String> = emptyList()
 )
 
 object Tags {
@@ -95,6 +97,25 @@ class NoteStore(initial: List<Note> = emptyList()) {
     fun removeTag(id: Long, tag: String) {
         val i = notes.indexOfFirst { it.id == id }
         if (i >= 0) notes[i] = notes[i].copy(tags = notes[i].tags - tag)
+    }
+
+    fun addImage(id: Long, name: String, index: Int = Int.MAX_VALUE) {
+        val i = notes.indexOfFirst { it.id == id }
+        if (i < 0 || !ImageName.isSafe(name) || name in notes[i].images) return
+        val list = notes[i].images.toMutableList().also { it.add(index.coerceIn(0, it.size), name) }
+        notes[i] = notes[i].copy(images = list)
+    }
+
+    /** Detaches the photo; the file stays until [ImageFiles.sweep] so Undo can bring it back. */
+    fun removeImage(id: Long, name: String) {
+        val i = notes.indexOfFirst { it.id == id }
+        if (i >= 0) notes[i] = notes[i].copy(images = notes[i].images - name)
+    }
+
+    /** Names in [onDisk] that no note (including trashed ones) references any more. */
+    fun orphanedImages(onDisk: Collection<String>): List<String> {
+        val used = notes.flatMap { it.images }.toSet()
+        return onDisk.filter { it !in used }
     }
 
     /** Sorted distinct tags across notes that are not in Trash. */
@@ -188,7 +209,7 @@ class NoteStore(initial: List<Note> = emptyList()) {
             )
 
     fun serialize(): String = notes.joinToString("\n") {
-        "${it.id}\t${it.pinned}:${it.createdAt}:${it.checklist}:${it.checked.sorted().joinToString(",")}:${it.color?.name.orEmpty()}:${it.archived}:${it.trashedAt ?: ""}:${it.tags.joinToString(",")}:${it.remindAt ?: ""}\t${it.text.replace("\\", "\\\\").replace("\n", "\\n")}"
+        "${it.id}\t${it.pinned}:${it.createdAt}:${it.checklist}:${it.checked.sorted().joinToString(",")}:${it.color?.name.orEmpty()}:${it.archived}:${it.trashedAt ?: ""}:${it.tags.joinToString(",")}:${it.remindAt ?: ""}:${it.images.joinToString(",")}\t${it.text.replace("\\", "\\\\").replace("\n", "\\n")}"
     }
 
     companion object {
@@ -200,7 +221,7 @@ class NoteStore(initial: List<Note> = emptyList()) {
                 if (parts.size < 3) return@mapNotNull null
                 val text = parts[2].replace(Regex("\\\\(.)")) { if (it.groupValues[1] == "n") "\n" else it.groupValues[1] }
                 // Old data has just "pinned"; new data has "pinned:createdAt" (0 = unknown).
-                val meta = parts[1].split(":", limit = 9)
+                val meta = parts[1].split(":", limit = 10)
                 Note(
                     parts[0].toLongOrNull() ?: return@mapNotNull null,
                     text,
@@ -212,7 +233,8 @@ class NoteStore(initial: List<Note> = emptyList()) {
                     meta.getOrNull(5).toBoolean(),
                     meta.getOrNull(6)?.toLongOrNull(),
                     Tags.parse(meta.getOrNull(7).orEmpty()),
-                    meta.getOrNull(8)?.toLongOrNull()
+                    meta.getOrNull(8)?.toLongOrNull(),
+                    meta.getOrNull(9).orEmpty().split(",").filter { ImageName.isSafe(it) }
                 )
             }
         )
