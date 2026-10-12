@@ -90,6 +90,18 @@
     <string name="app_lock_prompt_title">Unlock Notes</string>
     <string name="app_lock_prompt_body">Confirm your screen lock to open your notes.</string>
     <string name="a11y_pinned">Pinned</string>
+    <string name="add_photo">Add photo</string>
+    <string name="add_photo_description">Add a photo to this note</string>
+    <string name="remove_photo">Remove</string>
+    <string name="remove_photo_description">Remove photo %1$d of %2$d</string>
+    <string name="photo_description">Photo %1$d of %2$d</string>
+    <string name="msg_photo_removed">Photo removed</string>
+    <string name="msg_photo_failed">Couldn\'t add that photo</string>
+    <plurals name="a11y_photos">
+        <item quantity="one">%d photo attached</item>
+        <item quantity="other">%d photos attached</item>
+    </plurals>
+    <string name="more_photos">+%d</string>
     <string name="a11y_colour">Colour: %1$s</string>
     <string name="a11y_tags">Tags: %1$s</string>
     <string name="done_section">Done</string>
