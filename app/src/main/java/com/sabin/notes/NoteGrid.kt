@@ -18,6 +18,13 @@ object NotePreview {
     const val MAX_LINES = 6
     const val MAX_ITEMS = 4
 
+    /** Preview that starts at the first search match when [query] matches beyond the clipped text. */
+    fun text(note: Note, query: String): String {
+        val full = note.text.trim()
+        val start = SearchHighlight.previewStart(full, query, MAX_CHARS)
+        return if (start == 0) text(note) else "…" + text(note.copy(text = full.substring(start)))
+    }
+
     fun text(note: Note): String {
         val lines = note.text.trim().lines()
         var out = lines.take(MAX_LINES).joinToString("\n")
