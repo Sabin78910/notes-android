@@ -57,6 +57,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
@@ -408,6 +409,17 @@ fun NotesScreen(appLockAvailable: Boolean = false, appLockEnabled: Boolean = fal
         }
     }
 
+    fun clearTickedWithUndo(n: Note) {
+        val removed = store.clearTicked(n.id)
+        if (removed == 0) return
+        save()
+        scope.launch {
+            snackbarHost.currentSnackbarData?.dismiss()
+            val result = snackbarHost.showSnackbar(appContext.resources.getQuantityString(R.plurals.msg_ticked_cleared, removed, removed), actionLabel = appContext.getString(R.string.undo), duration = SnackbarDuration.Long)
+            if (result == SnackbarResult.ActionPerformed) { store.restoreChecklist(n.id, n.text, n.checked); save() }
+        }
+    }
+
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -594,6 +606,13 @@ fun NotesScreen(appLockAvailable: Boolean = false, appLockEnabled: Boolean = fal
                                             modifier = Modifier.alpha(1f - 0.4f * strike)
                                         )
                                     }
+                                }
+                                if (sec.done.isNotEmpty()) {
+                                    val clearLabel = pluralStringResource(R.plurals.clear_ticked, sec.done.size, sec.done.size)
+                                    TextButton(
+                                        onClick = { clearTickedWithUndo(n) },
+                                        modifier = Modifier.heightIn(min = 48.dp).widthIn(min = 48.dp).semantics { contentDescription = clearLabel }
+                                    ) { Text(stringResource(R.string.clear_ticked_short)) }
                                 }
                                 if (NotePreview.hiddenItems(n) > 0) Text(stringResource(R.string.more_items, NotePreview.hiddenItems(n)), style = MaterialTheme.typography.labelMedium)
                                 if (Checklist.shouldCelebrate(p, animationsEnabled)) {

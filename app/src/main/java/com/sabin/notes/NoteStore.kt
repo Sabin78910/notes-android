@@ -119,6 +119,23 @@ class NoteStore(initial: List<Note> = emptyList()) {
         notes[i] = notes[i].copy(checked = if (index in c) c - index else c + index)
     }
 
+    /** Removes ticked items from a checklist, keeping open items in order; returns how many were removed. */
+    fun clearTicked(id: Long): Int {
+        val i = notes.indexOfFirst { it.id == id }
+        if (i < 0 || !notes[i].checklist) return 0
+        val items = Checklist.items(notes[i].text)
+        val kept = items.filterIndexed { idx, _ -> idx !in notes[i].checked }
+        if (kept.size == items.size) return 0
+        notes[i] = notes[i].copy(text = kept.joinToString("\n"), checked = emptySet())
+        return items.size - kept.size
+    }
+
+    /** Puts back a checklist's exact text and ticks, used by Undo of [clearTicked]. */
+    fun restoreChecklist(id: Long, text: String, checked: Set<Int>) {
+        val i = notes.indexOfFirst { it.id == id }
+        if (i >= 0) notes[i] = notes[i].copy(text = text, checked = checked)
+    }
+
     /** Moves the note to Trash; it is purged after [TRASH_RETENTION_MS]. */
     fun delete(id: Long, now: Long = System.currentTimeMillis()) {
         val i = notes.indexOfFirst { it.id == id }
