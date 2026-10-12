@@ -4,6 +4,11 @@ package com.sabin.notes
 object BrandColors {
     const val SEED = 0xFFF59E0B
     const val CARD_CORNER_DP = 26
+    const val BACKDROP_CORNER_DP = 28
+    const val HEADER_SPACING_DP = 16
+
+    /** Wallpaper colours turned the UI blue; the amber brand scheme wins unless the user opts in. */
+    fun useDynamic(sdk: Int, optedIn: Boolean) = optedIn && sdk >= 31
 
     class Scheme(
         val primary: Long, val onPrimary: Long,

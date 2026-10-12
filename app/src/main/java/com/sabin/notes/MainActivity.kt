@@ -35,6 +35,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
@@ -419,14 +423,13 @@ fun NotesScreen(appLockAvailable: Boolean = false, appLockEnabled: Boolean = fal
                         )
                     }
                     IconButton(onClick = { newestFirst = !newestFirst }, modifier = Modifier.semantics { contentDescription = SortOrder.description(newestFirst) }) {
-                        Text(SortOrder.glyph(newestFirst), style = MaterialTheme.typography.titleLarge)
+                        Icon(if (newestFirst) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowUp, contentDescription = null)
                     }
                     IconButton(
                         onClick = { layout = layout.toggled(); prefs.edit().putString(KEY_LAYOUT, layout.name).apply() },
                         modifier = Modifier.semantics { contentDescription = layout.toggleDescription() }
                     ) {
-                        if (layout == LayoutMode.GRID) Icon(Icons.Filled.Menu, contentDescription = null)
-                        else Text("▦", style = MaterialTheme.typography.titleLarge)
+                        Icon(if (layout == LayoutMode.GRID) Icons.AutoMirrored.Filled.List else Icons.Filled.Menu, contentDescription = null)
                     }
                     var menuOpen by remember { mutableStateOf(false) }
                     Box {
@@ -456,7 +459,7 @@ fun NotesScreen(appLockAvailable: Boolean = false, appLockEnabled: Boolean = fal
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(bottom = 88.dp)
         ) {
-          item(span = StaggeredGridItemSpan.FullLine) { Column {
+          item(span = StaggeredGridItemSpan.FullLine) { Column(verticalArrangement = Arrangement.spacedBy(BrandColors.HEADER_SPACING_DP.dp)) {
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                 val views = listOf("Notes", "Archive", "Trash")
                 val viewLabels = listOf(R.string.title_notes, R.string.archive, R.string.trash)
@@ -464,6 +467,10 @@ fun NotesScreen(appLockAvailable: Boolean = false, appLockEnabled: Boolean = fal
                     SegmentedButton(
                         selected = view == v, onClick = { view = v },
                         shape = SegmentedButtonDefaults.itemShape(i, views.size),
+                        colors = SegmentedButtonDefaults.colors(
+                            activeContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            activeContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        ),
                         label = { Text(stringResource(viewLabels[i])) }
                     )
                 }
@@ -471,10 +478,6 @@ fun NotesScreen(appLockAvailable: Boolean = false, appLockEnabled: Boolean = fal
             if (view == "Trash") {
                 TextButton(onClick = { store.emptyTrash(); save() }, modifier = Modifier.heightIn(min = 48.dp)) { Text(stringResource(R.string.empty_trash)) }
                 Text(stringResource(R.string.trash_note), style = MaterialTheme.typography.bodySmall)
-            }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(stringResource(R.string.reminders))
-                Switch(remindersOn, { on -> if (on) explainReminders = true else setRemindersEnabled(false) })
             }
             if (appLockAvailable) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(stringResource(R.string.app_lock_setting), Modifier.weight(1f))
@@ -487,27 +490,35 @@ fun NotesScreen(appLockAvailable: Boolean = false, appLockEnabled: Boolean = fal
                 singleLine = true,
                 shape = RoundedCornerShape(28.dp),
                 colors = TextFieldDefaults.colors(focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent, disabledIndicatorColor = Color.Transparent),
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                modifier = Modifier.fillMaxWidth()
             )
-            Row(Modifier.edgeFade().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.edgeFade().horizontalScroll(rememberScrollState()).padding(start = 4.dp, end = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                FilterChip(
+                    remindersOn, { if (!remindersOn) explainReminders = true else setRemindersEnabled(false) },
+                    label = { Text(stringResource(R.string.reminders)) },
+                    leadingIcon = { Icon(Icons.Filled.Notifications, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
+                )
                 FilterChip(colorFilter == null, { colorFilter = null }, label = { Text(stringResource(R.string.all)) })
                 NoteColor.entries.forEach { c ->
                     FilterChip(
                         colorFilter == c, { colorFilter = if (colorFilter == c) null else c },
                         label = { Text(if (colorFilter == c) "✓ ${c.label}" else c.label, color = Color(c.text(dark))) },
-                        colors = FilterChipDefaults.filterChipColors(containerColor = Color(c.background(dark)), selectedContainerColor = Color(c.background(dark)))
+                        colors = FilterChipDefaults.filterChipColors(containerColor = Color(c.background(dark)), selectedContainerColor = Color(c.background(dark))),
+                        border = FilterChipDefaults.filterChipBorder(
+                            enabled = true, selected = colorFilter == c,
+                            borderColor = Color(c.border(dark)), selectedBorderColor = Color(c.text(dark)),
+                            borderWidth = 1.dp, selectedBorderWidth = 2.dp
+                        )
                     )
                 }
-                Spacer(Modifier.width(24.dp))
             }
             val allTags = remember(version) { store.allTags() }
             if (tagFilter != null && tagFilter !in allTags) tagFilter = null
             if (allTags.isNotEmpty()) {
-                Row(Modifier.edgeFade().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.edgeFade().horizontalScroll(rememberScrollState()).padding(start = 4.dp, end = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     allTags.forEach { t ->
                         FilterChip(tagFilter == t, { tagFilter = if (tagFilter == t) null else t }, label = { Text(if (tagFilter == t) "✓ #$t" else "#$t") })
                     }
-                    Spacer(Modifier.width(24.dp))
                 }
             }
           } }
