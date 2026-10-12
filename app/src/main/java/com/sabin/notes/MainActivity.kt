@@ -31,6 +31,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material.icons.Icons
@@ -601,7 +602,7 @@ fun NotesScreen(appLockAvailable: Boolean = false, appLockEnabled: Boolean = fal
                                         Spacer(Modifier.width(8.dp))
                                         val strike by animateFloatAsState(if (ticked) 1f else 0f, if (animationsEnabled) spring() else snap())
                                         Text(
-                                            entry.text,
+                                            AnnotatedString(entry.text).highlighted(query, MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.8f)),
                                             textDecoration = if (ticked) TextDecoration.LineThrough else null,
                                             modifier = Modifier.alpha(1f - 0.4f * strike)
                                         )
@@ -618,7 +619,7 @@ fun NotesScreen(appLockAvailable: Boolean = false, appLockEnabled: Boolean = fal
                                 if (Checklist.shouldCelebrate(p, animationsEnabled)) {
                                     Text(stringResource(R.string.all_done), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
                                 }
-                            } else Text(linkified(NotePreview.text(n), MaterialTheme.colorScheme.primary), maxLines = NotePreview.MAX_LINES, overflow = TextOverflow.Ellipsis)
+                            } else Text(linkified(NotePreview.text(n, query), MaterialTheme.colorScheme.primary).highlighted(query, MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.8f)), maxLines = NotePreview.MAX_LINES, overflow = TextOverflow.Ellipsis)
                             if (n.createdAt > 0) {
                                 Text(
                                     stringResource(R.string.created_at, DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(n.createdAt))),
