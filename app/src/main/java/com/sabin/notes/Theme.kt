@@ -43,10 +43,10 @@ private val ExpressiveShapes = Shapes(
 )
 
 @Composable
-fun NotesTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
+fun NotesTheme(dark: Boolean = isSystemInDarkTheme(), dynamicColor: Boolean = false, content: @Composable () -> Unit) {
     val context = LocalContext.current
     val colors = when {
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
+        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && BrandColors.useDynamic(Build.VERSION.SDK_INT, true) ->
             if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         dark -> BrandColors.dark.toDark()
         else -> BrandColors.light.toLight()

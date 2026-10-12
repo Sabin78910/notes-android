@@ -16,6 +16,9 @@ enum class NoteColor(val label: String, val lightBg: Long, val darkBg: Long) {
     fun background(dark: Boolean): Long = if (dark) darkBg else lightBg
     fun text(dark: Boolean): Long = if (dark) 0xFFFFFFFF else 0xFF000000
 
+    /** Outline that keeps the chip edge visible against the page (>= 3:1) in both themes. */
+    fun border(dark: Boolean): Long = if (dark) lightBg else 0xFF6B6B6B
+
     fun contrast(dark: Boolean): Double = contrastRatio(background(dark), text(dark))
 
     companion object {

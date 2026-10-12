@@ -13,6 +13,12 @@ class NoteColorTest {
             assertTrue("${c.name} dark=$dark", c.contrast(dark) >= 4.5)
     }
 
+    @Test fun chipBorderStandsOutFromPageInBothThemes() {
+        val pages = mapOf(false to BrandColors.light.background, true to BrandColors.dark.background)
+        for (c in NoteColor.entries) for (dark in listOf(false, true))
+            assertTrue("${c.name} dark=$dark", NoteColor.contrastRatio(c.border(dark), pages.getValue(dark)) >= 3.0)
+    }
+
     @Test fun filterByColour() {
         val s = NoteStore()
         val a = s.add("a"); val b = s.add("b"); s.add("c")
