@@ -93,4 +93,13 @@
     <string name="a11y_colour">Colour: %1$s</string>
     <string name="a11y_tags">Tags: %1$s</string>
     <string name="done_section">Done</string>
+    <plurals name="clear_ticked">
+        <item quantity="one">Clear %d ticked item</item>
+        <item quantity="other">Clear %d ticked items</item>
+    </plurals>
+    <plurals name="msg_ticked_cleared">
+        <item quantity="one">%d ticked item cleared</item>
+        <item quantity="other">%d ticked items cleared</item>
+    </plurals>
+    <string name="clear_ticked_short">Clear ticked</string>
 </resources>

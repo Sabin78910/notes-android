@@ -93,4 +93,13 @@
     <string name="a11y_colour">रङ: %1$s</string>
     <string name="a11y_tags">ट्यागहरू: %1$s</string>
     <string name="done_section">सम्पन्न</string>
+    <plurals name="clear_ticked">
+        <item quantity="one">%d टिक गरिएको वस्तु हटाउनुहोस्</item>
+        <item quantity="other">%d टिक गरिएका वस्तु हटाउनुहोस्</item>
+    </plurals>
+    <plurals name="msg_ticked_cleared">
+        <item quantity="one">%d टिक गरिएको वस्तु हटाइयो</item>
+        <item quantity="other">%d टिक गरिएका वस्तु हटाइए</item>
+    </plurals>
+    <string name="clear_ticked_short">टिक गरिएका हटाउनुहोस्</string>
 </resources>

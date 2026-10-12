@@ -165,4 +165,58 @@ class NoteStoreTest {
         assertEquals(777L, r.trashed().single().trashedAt)
         assertEquals(listOf("c"), r.visible().map { it.text })
     }
+
+    private fun checklist(text: String, vararg ticked: Int): Pair<NoteStore, Long> {
+        val s = NoteStore()
+        val n = s.add(text)
+        s.setChecklist(n.id, true)
+        ticked.forEach { s.toggleItem(n.id, it) }
+        return s to n.id
+    }
+
+    private fun NoteStore.get(id: Long) = all().first { it.id == id }
+
+    @Test fun clearTickedRemovesOnlyTickedAndKeepsOrder() {
+        val (s, id) = checklist("a\nb\nc\nd", 1, 3)
+        assertEquals(2, s.clearTicked(id))
+        assertEquals("a\nc", s.get(id).text)
+        assertTrue(s.get(id).checked.isEmpty())
+    }
+
+    @Test fun clearTickedWithNoneTickedIsNoOp() {
+        val (s, id) = checklist("a\nb")
+        assertEquals(0, s.clearTicked(id))
+        assertEquals("a\nb", s.get(id).text)
+    }
+
+    @Test fun clearTickedIgnoresOutOfRangeTicks() {
+        val (s, id) = checklist("a\nb", 0)
+        s.restoreChecklist(id, "a\nb", setOf(0, 7))
+        assertEquals(1, s.clearTicked(id))
+        assertEquals("b", s.get(id).text)
+        assertTrue(s.get(id).checked.isEmpty())
+    }
+
+    @Test fun clearTickedWhenAllTickedLeavesEmptyList() {
+        val (s, id) = checklist("a\nb", 0, 1)
+        assertEquals(2, s.clearTicked(id))
+        assertEquals(emptyList<String>(), Checklist.items(s.get(id).text))
+        assertEquals(Checklist.Progress(0, 0), Checklist.progress(s.get(id)))
+    }
+
+    @Test fun clearTickedIgnoresPlainNotesAndUnknownIds() {
+        val s = NoteStore()
+        val n = s.add("a\nb")
+        assertEquals(0, s.clearTicked(n.id))
+        assertEquals(0, s.clearTicked(999))
+        assertEquals("a\nb", s.get(n.id).text)
+    }
+
+    @Test fun restoreChecklistBringsBackTextAndTicksExactly() {
+        val (s, id) = checklist("a\nb\nc", 0, 2)
+        val before = s.get(id)
+        s.clearTicked(id)
+        s.restoreChecklist(id, before.text, before.checked)
+        assertEquals(before, s.get(id))
+    }
 }
